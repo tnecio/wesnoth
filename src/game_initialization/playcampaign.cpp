@@ -39,7 +39,11 @@
 #include "saved_game.hpp"
 #include "savegame.hpp"
 #include "sound.hpp"
+#ifndef __EMSCRIPTEN__
 #include "wesnothd_connection.hpp"
+#else
+#include "wesnothd_connection_error.hpp"
+#endif
 #include "wml_exception.hpp"
 
 #define LOG_G LOG_STREAM(info, lg::general)

@@ -312,6 +312,145 @@ if(ENABLE_SERVER)
 	install(TARGETS wesnothd DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
+########### WesnothLite Shared Library / WASM Module ###############
+
+GetSources("wesnoth_headless" wesnoth_headless_sources)
+GetSources("wesnoth_headless_stubs" wesnoth_headless_stubs_sources)
+GetSources("lua" lua_headless_sources)
+
+# Stubs are compiled as a separate OBJECT library so that editing stub files
+# or changing source_lists/wesnoth_headless_stubs only invalidates stub objects,
+# not the ~250 main game source files.
+add_library(wesnothlite-stubs OBJECT ${wesnoth_headless_stubs_sources})
+target_include_directories(wesnothlite-stubs BEFORE PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/stubs
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/headless
+)
+target_include_directories(wesnothlite-stubs PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_BINARY_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite
+	${CMAKE_CURRENT_SOURCE_DIR}/modules
+)
+
+target_compile_definitions(wesnothlite-stubs PRIVATE HEADLESS_ENGINE=1)
+set_property(TARGET wesnothlite-stubs PROPERTY POSITION_INDEPENDENT_CODE ON)
+if(EMSCRIPTEN)
+	target_compile_options(wesnothlite-stubs PRIVATE
+		-sUSE_ICU=1 -sUSE_ZLIB=1 -sUSE_BZIP2=1 -fexceptions -pthread)
+endif()
+
+if(EMSCRIPTEN)
+	add_executable(wesnothlite
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${wesnoth_headless_sources}
+		${lua_headless_sources}
+		$<TARGET_OBJECTS:wesnothlite-stubs>
+	)
+	# Emscripten outputs .js + .wasm pair; set the output name explicitly.
+	set_target_properties(wesnothlite PROPERTIES OUTPUT_NAME wesnothlite SUFFIX ".js")
+	target_compile_options(wesnothlite PRIVATE
+		-sUSE_ICU=1
+		-sUSE_ZLIB=1
+		-sUSE_BZIP2=1
+		-fexceptions
+		-pthread
+	)
+	target_link_options(wesnothlite PRIVATE
+		-sMODULARIZE=1
+		-sEXPORT_NAME=WesnothLite
+		-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,setValue,getValue,FS
+		-sFORCE_FILESYSTEM=1
+		-lnodefs.js
+		-sALLOW_MEMORY_GROWTH=1
+		-sSTACK_SIZE=5242880
+		-sINITIAL_MEMORY=67108864
+		-sWASM=1
+		-sUSE_SDL=2
+		-sUSE_ICU=1
+		-sUSE_ZLIB=1
+		-sUSE_BZIP2=1
+		-fexceptions
+		-sDISABLE_EXCEPTION_CATCHING=0
+		-sEXIT_RUNTIME=0
+		-sNO_EXIT_RUNTIME=1
+		-pthread
+		-sPTHREAD_POOL_SIZE=2
+		-sPROXY_TO_PTHREAD=0
+		-sEXPORTED_FUNCTIONS=_malloc,_free
+	)
+	target_link_libraries(wesnothlite
+		${common-external-libs}
+		# boost::filesystem replaced by std::filesystem via compat header
+		${Boost_LIBRARIES}
+		${CMAKE_DL_LIBS}
+	)
+else()
+	add_library(wesnothlite SHARED
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${wesnoth_headless_sources}
+		${lua_headless_sources}
+		$<TARGET_OBJECTS:wesnothlite-stubs>
+	)
+	target_link_libraries(wesnothlite
+		${common-external-libs}
+		${Boost_LIBRARIES}
+		OpenSSL::Crypto
+		OpenSSL::SSL
+		${CMAKE_DL_LIBS}
+	)
+endif()
+
+# Stubs and mock SDL headers shadow the real ones — BEFORE prepends ahead of global include_directories
+target_include_directories(wesnothlite BEFORE PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/stubs
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/headless
+)
+target_include_directories(wesnothlite PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_BINARY_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite
+	${CMAKE_CURRENT_SOURCE_DIR}/modules
+)
+
+target_compile_definitions(wesnothlite PRIVATE HEADLESS_ENGINE=1)
+set_property(TARGET wesnothlite PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+# Apply same Lua compile flags as the main build
+file(GLOB wesnoth_lua_config ${CMAKE_CURRENT_SOURCE_DIR}/wesnoth_lua_config.h)
+set_source_files_properties(${lua_headless_sources} PROPERTIES OBJECT_DEPENDS ${wesnoth_lua_config})
+if(NOT MSVC)
+	set_source_files_properties(${lua_headless_sources} PROPERTIES
+		COMPILE_FLAGS "-include \"${wesnoth_lua_config}\" -x c++ -Wno-old-style-cast -Wno-useless-cast -Wno-stringop-overflow")
+else()
+	set_source_files_properties(${lua_headless_sources} PROPERTIES COMPILE_FLAGS "/FI\"${wesnoth_lua_config}\"")
+endif()
+
+# Force the linker to fail if any symbols are missing
+if(EMSCRIPTEN)
+	# Emscripten handles undefined symbols differently — rely on its checks.
+elseif(APPLE)
+	target_link_options(wesnothlite PRIVATE "-Wl,-undefined,error")
+else()
+	target_link_options(wesnothlite PRIVATE "-Wl,--no-undefined")
+endif()
+
+########### WesnothLite CLI (native only) ###############
+
+if(NOT EMSCRIPTEN)
+	add_executable(wl-cli
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_cli.cpp
+	)
+
+	target_include_directories(wl-cli PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite
+	)
+
+	target_link_libraries(wl-cli
+		wesnothlite
+	)
+endif()
+
 ########### Campaignd Server ###############
 
 if(ENABLE_CAMPAIGN_SERVER)

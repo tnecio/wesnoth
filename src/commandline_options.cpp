@@ -20,6 +20,7 @@
 #include "lexical_cast.hpp"
 #include "serialization/string_utils.hpp"  // for split
 
+#ifndef __EMSCRIPTEN__
 #include <boost/any.hpp>                // for any
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/errors.hpp>  // for validation_error, etc
@@ -27,6 +28,7 @@
 #include <boost/program_options/positional_options.hpp>
 #include <boost/program_options/value_semantic.hpp>  // for value, etc
 #include <boost/program_options/variables_map.hpp>  // for variables_map, etc
+#endif
 
 #include <array>
 #include <string>
@@ -35,6 +37,7 @@
 # include <unistd.h>  // for isatty
 #endif
 
+#ifndef __EMSCRIPTEN__
 namespace po = boost::program_options;
 
 class two_strings : public std::pair<std::string,std::string> {};
@@ -50,6 +53,7 @@ static void validate(boost::any& v, const std::vector<std::string>& values,
 	ret_val.second = values[1];
 	v = ret_val;
 }
+#endif
 
 bad_commandline_resolution::bad_commandline_resolution(const std::string& resolution)
 	: error(formatter() << "Invalid resolution \"" << resolution
@@ -175,10 +179,13 @@ commandline_options::commandline_options(const std::vector<std::string>& args)
 	, translation_percent()
 	, args_(args.begin() + 1, args.end())
 	, args0_(*args.begin())
+#ifndef __EMSCRIPTEN__
 	, all_()
 	, visible_()
 	, hidden_()
+#endif
 {
+#ifndef __EMSCRIPTEN__
 	// When adding items don't forget to update doc/man/wesnoth.6
 	// Options are sorted alphabetically by --long-option.
 	po::options_description general_opts("General options");
@@ -565,6 +572,7 @@ commandline_options::commandline_options(const std::vector<std::string>& args)
 			}
 		}
 	}
+#endif // !__EMSCRIPTEN__
 }
 
 void commandline_options::parse_log_domains_(const std::string &domains_string, const lg::severity severity)
@@ -665,7 +673,9 @@ std::vector<std::tuple<unsigned int,std::string,std::string>> commandline_option
 std::ostream& operator<<(std::ostream &os, const commandline_options& cmdline_opts)
 {
 	os << "Usage: " << cmdline_opts.args0_ << " [<options>] [<data-directory>]\n";
+#ifndef __EMSCRIPTEN__
 	os << cmdline_opts.visible_;
+#endif
 	return os;
 }
 

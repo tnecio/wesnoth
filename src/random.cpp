@@ -16,7 +16,9 @@
 #include "random.hpp"
 #include "log.hpp"
 
+#ifndef __EMSCRIPTEN__
 #include <boost/random/random_device.hpp>
+#endif
 
 #include <cassert>
 #include <limits>
@@ -38,10 +40,16 @@ namespace {
 		rng_default()
 			: gen_()
 		{
-			/* Note: do not replace this with std::random_device.
+			/* Note: do not replace this with std::random_device on desktop.
 			 * @cbeck88 told in IRC (2016-10-16) that std::random_device
-			 * is very poorly implemented in MinGW. */
+			 * is very poorly implemented in MinGW. Under Emscripten,
+			 * boost::random_device is unavailable, so we use std::random_device
+			 * which is backed by the browser's crypto API. */
+#ifdef __EMSCRIPTEN__
+			std::random_device entropy_source;
+#else
 			boost::random_device entropy_source;
+#endif
 			gen_.seed(entropy_source());
 		}
 	protected:

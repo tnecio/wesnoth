@@ -33,13 +33,17 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#ifdef __EMSCRIPTEN__
+#include "wesnothlite/compat/boost_filesystem_wasm.hpp"
+#else
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/format.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
+#endif
 
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
 
 #if BOOST_VERSION >= 108600
 #include <boost/process/v2/environment.hpp>
@@ -266,12 +270,12 @@ bool is_filename_case_correct(const std::string& fname, const boost::iostreams::
 	return real_name == filesystem::base_name(fname);
 }
 
-#else
+#elif !defined(__EMSCRIPTEN__)
 bool is_filename_case_correct(const std::string& /*fname*/, const boost::iostreams::file_descriptor_source& /*fd*/)
 {
 	return true;
 }
-#endif
+#endif // _WIN32 / !__EMSCRIPTEN__
 } // namespace
 
 namespace filesystem
@@ -1033,6 +1037,7 @@ std::string get_exe_path()
 		}
 	}
 
+#ifndef __EMSCRIPTEN__
 	// check the PATH for wesnoth's location
 	// with version
 	std::string version = std::to_string(game_config::wesnoth_version.major_version()) + "." + std::to_string(game_config::wesnoth_version.minor_version());
@@ -1056,6 +1061,7 @@ std::string get_exe_path()
 	if(!search.empty()) {
 		return search.string();
 	}
+#endif
 
 	// return the current working directory
 	return get_cwd() + "/wesnoth";
@@ -1186,6 +1192,13 @@ filesystem::scoped_istream istream_file(const std::string& fname, bool treat_fai
 		return s;
 	}
 
+#ifdef __EMSCRIPTEN__
+	auto s = std::make_unique<std::ifstream>(fname, std::ios_base::binary);
+	if(!s->is_open() && treat_failure_as_error) {
+		ERR_FS << "Could not open '" << fname << "' for reading.";
+	}
+	return s;
+#else
 	// mingw doesn't  support std::basic_ifstream::basic_ifstream(const wchar_t* fname)
 	// that why boost::filesystem::fstream.hpp doesn't work with mingw.
 	try {
@@ -1211,11 +1224,26 @@ filesystem::scoped_istream istream_file(const std::string& fname, bool treat_fai
 		s->clear(std::ios_base::failbit);
 		return s;
 	}
+#endif
 }
 
 filesystem::scoped_ostream ostream_file(const std::string& fname, std::ios_base::openmode mode, bool create_directory)
 {
 	LOG_FS << "streaming " << fname << " for writing.";
+#ifdef __EMSCRIPTEN__
+	auto s = std::make_unique<std::ofstream>(fname, mode);
+	if(!s->is_open()) {
+		if(create_directory) {
+			error_code ec_unused;
+			bfs::create_directories(bfs::path(fname).parent_path(), ec_unused);
+			s = std::make_unique<std::ofstream>(fname, mode);
+		}
+		if(!s->is_open()) {
+			throw filesystem::io_exception("Could not open '" + fname + "' for writing.");
+		}
+	}
+	return s;
+#else
 	try {
 		boost::iostreams::file_descriptor_sink fd(bfs::path(fname), mode);
 		return std::make_unique<boost::iostreams::stream<boost::iostreams::file_descriptor_sink>>(fd, 4096, 0);
@@ -1229,6 +1257,7 @@ filesystem::scoped_ostream ostream_file(const std::string& fname, std::ios_base:
 
 		throw filesystem::io_exception(e.what());
 	}
+#endif
 }
 
 // Throws io_exception if an error occurs
@@ -1746,7 +1775,14 @@ utils::optional<std::string> get_wml_location(const std::string& path, const uti
 			WRN_FS << "Cannot resolve " << path << " since the game data directory is unknown!";
 			return utils::nullopt;
 		}
+#ifdef __EMSCRIPTEN__
+		// std::filesystem::path operator/ with an absolute RHS replaces the whole path,
+		// unlike boost::filesystem which appends. Strip any leading '/' to make it relative.
+		const std::string rel = (!path.empty() && path[0] == '/') ? path.substr(1) : path;
+		result = bfs::path(game_config::path) / "data" / rel;
+#else
 		result = bfs::path(game_config::path) / "data" / path;
+#endif
 	}
 
 	if(!file_exists(result)) {
@@ -1881,7 +1917,7 @@ utils::optional<std::string> get_addon_id_from_path(const std::string& location)
 
 	if(full_path.find(addons_path) == 0) {
 		bfs::path path(full_path.substr(addons_path.size()+1));
-		if(path.size() > 0) {
+		if(!path.empty() && path.begin() != path.end()) {
 			return path.begin()->string();
 		}
 	}

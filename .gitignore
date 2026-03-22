@@ -104,12 +104,14 @@ stamp-h1
 
 # build directories
 /wesnoth*
+!/wesnothlite/
 /wesnothd*
 /campaignd*
 /cutter*
 cutter/
 /exploder*
 /build/
+/build-wasm/
 Release
 Debug
 ReleaseDEBUG

@@ -16,6 +16,7 @@
 #include "game_initialization/create_engine.hpp"
 
 #include "filesystem.hpp"
+#include "font/constants.hpp"
 #include "game_config_manager.hpp"
 #include "preferences/preferences.hpp"
 #include "game_initialization/component_availability.hpp"

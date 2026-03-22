@@ -270,6 +270,10 @@ void set_log_to_file()
 	// if the log directory is writable, then setup logging and rotate the logs.
 	// if the optional isn't set, then logging to file has been disabled, so don't try to do anything
 	if(is_log_dir_writable_.value_or(false)) {
+#ifdef __EMSCRIPTEN__
+		// No file logging under Emscripten — output goes to the browser console.
+		(void)output_file_path_;
+#else
 		// get the log file stream and assign cerr+cout to it
 		logs_dir_ = filesystem::get_logs_dir();
 		output_file_path_ = filesystem::get_logs_dir()+"/"+unique_log_filename();
@@ -306,6 +310,7 @@ void set_log_to_file()
 		}
 
 		rotate_logs(filesystem::get_logs_dir());
+#endif
 	}
 }
 

@@ -24,7 +24,12 @@
 #include "log.hpp"
 
 
+#ifdef __EMSCRIPTEN__
+#include <regex>
+namespace boost { using std::regex; using std::sregex_token_iterator; }
+#else
 #include <boost/regex.hpp>
+#endif
 
 namespace ai {
 

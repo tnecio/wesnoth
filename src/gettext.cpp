@@ -21,16 +21,19 @@
 #include <locale>
 #include <map>
 #include <boost/locale.hpp>
+#include <boost/version.hpp>
 #include <set>
 #include <type_traits>
 
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
-#include "spirit_po/spirit_po.hpp"
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
+#ifndef __EMSCRIPTEN__
+#  if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#  endif
+#  include "spirit_po/spirit_po.hpp"
+#  if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 #define DBG_G LOG_STREAM(debug, lg::general())
@@ -100,6 +103,7 @@ namespace
 				lang_name_short += inf.variant();
 			}
 			DBG_G << "Loading po files for language " << lang_name_long;
+#ifndef __EMSCRIPTEN__
 			for(auto& domain : domains) {
 				DBG_G << "Searching for po files for domain " << domain;
 				std::string path;
@@ -138,6 +142,7 @@ namespace
 					log_po_error(lang_name_long, domain, strerror(errno));
 				}
 			}
+#endif // !__EMSCRIPTEN__
 		}
 
 		static void log_po_error(const std::string& lang, const std::string& dom, const std::string& detail) {
@@ -149,6 +154,7 @@ namespace
 		{
 			auto& base = get_base();
 			const char* msg = base.get(domain_id, ctx, msg_id);
+#ifndef __EMSCRIPTEN__
 			if(msg == nullptr) {
 				auto iter = extra_messages_.find(domain_id);
 				if(iter == extra_messages_.end()) {
@@ -161,6 +167,7 @@ namespace
 					msg = lookup;
 				}
 			}
+#endif
 			return msg;
 		}
 
@@ -172,6 +179,7 @@ namespace
 		{
 			auto& base = get_base();
 			const char* msg = base.get(domain_id, ctx, sid, n);
+#ifndef __EMSCRIPTEN__
 			if(msg == nullptr) {
 				auto iter = extra_messages_.find(domain_id);
 				if(iter == extra_messages_.end()) {
@@ -184,6 +192,7 @@ namespace
 					msg = lookup;
 				}
 			}
+#endif
 			return msg;
 		}
 
@@ -205,7 +214,9 @@ namespace
 		}
 
 		std::locale base_loc_;
+#ifndef __EMSCRIPTEN__
 		std::map<int, spirit_po::default_catalog> extra_messages_;
+#endif
 	};
 	struct translation_manager
 	{

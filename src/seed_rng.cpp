@@ -22,7 +22,11 @@
 
 #include "seed_rng.hpp"
 
+#ifndef __EMSCRIPTEN__
 #include <boost/nondet_random.hpp>
+#else
+#include <random>
+#endif
 
 #include <sstream>
 #include <iomanip>
@@ -30,7 +34,11 @@
 namespace seed_rng {
 
 	uint32_t next_seed() {
+#ifdef __EMSCRIPTEN__
+		static std::random_device rnd_;
+#else
 		static boost::random_device rnd_;
+#endif
 		return rnd_();
 	}
 

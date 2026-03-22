@@ -80,7 +80,6 @@ bool headless();
   * render buffer, but performing actual rendering is unnecessary. */
 bool testing();
 
-
 /***********************/
 /* Windowing functions */
 /***********************/

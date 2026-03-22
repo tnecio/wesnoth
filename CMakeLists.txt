@@ -54,7 +54,13 @@ option(ENABLE_NLS "Enable building of translations" ${ENABLE_GAME})
 
 # The next line is the minimum version of Boost. The version that's actually found will be put in Boost_VERSION.
 set(MIN_USABLE_BOOST_VERSION "1.70")
-set(BOOST_REQ_COMPONENTS iostreams program_options regex thread random coroutine locale filesystem graph)
+set(BOOST_REQ_COMPONENTS iostreams program_options regex thread random locale filesystem graph)
+
+# boost-coroutine is not supported on Emscripten; the network code that uses
+# it is not compiled into wesnothlite, so we can safely exclude it for WASM.
+if(NOT EMSCRIPTEN)
+  list(APPEND BOOST_REQ_COMPONENTS coroutine)
+endif()
 
 if(ENABLE_TESTS)
   list(APPEND BOOST_REQ_COMPONENTS unit_test_framework)
@@ -93,16 +99,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # forbid defaulting to gnu++NN instead of c++NN
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(OpenSSL 1.0 REQUIRED)
+if(NOT EMSCRIPTEN)
+	find_package(OpenSSL 1.0 REQUIRED)
+endif()
 
-if(APPLE)
+if(APPLE AND NOT EMSCRIPTEN)
 	find_library(APPKIT_LIBRARY AppKit REQUIRED)
 	find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
 	find_library(IOKIT_LIBRARY IOKit REQUIRED)
 	find_library(SECURITY_LIBRARY Security REQUIRED)
 endif()
 
-find_package(ICU REQUIRED COMPONENTS data i18n uc)
+if(NOT EMSCRIPTEN)
+	find_package(ICU REQUIRED COMPONENTS data i18n uc)
+endif()
 
 # no, gettext executables are not required when NLS is deactivated
 find_package(Gettext)

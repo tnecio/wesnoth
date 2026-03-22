@@ -24,7 +24,11 @@
 #include "gettext.hpp"
 #include "log.hpp"
 
+#ifndef __EMSCRIPTEN__
 #include <boost/multi_index/hashed_index.hpp>
+#else
+#include <boost/functional/hash.hpp>
+#endif
 
 #include <map>
 #include <vector>

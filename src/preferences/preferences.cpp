@@ -50,11 +50,13 @@
 #include <windows.h>
 #endif
 
-#ifndef __APPLE__
-#include <openssl/evp.h>
-#include <openssl/err.h>
-#else
-#include <CommonCrypto/CommonCryptor.h>
+#if !defined(HEADLESS_ENGINE)
+#  ifndef __APPLE__
+#    include <openssl/evp.h>
+#    include <openssl/err.h>
+#  else
+#    include <CommonCrypto/CommonCryptor.h>
+#  endif
 #endif
 
 static lg::log_domain log_config("config");
@@ -1980,7 +1982,11 @@ preferences::secure_buffer prefs::build_key(const std::string& server, const std
 
 preferences::secure_buffer prefs::aes_encrypt(const preferences::secure_buffer& plaintext, const preferences::secure_buffer& key)
 {
-#ifndef __APPLE__
+#if defined(HEADLESS_ENGINE)
+	// No credential encryption in headless builds — multiplayer login is not supported.
+	(void)key;
+	return plaintext;
+#elif !defined(__APPLE__)
 	int update_length;
 	int extra_length;
 	int total_length;
@@ -2068,7 +2074,10 @@ preferences::secure_buffer prefs::aes_encrypt(const preferences::secure_buffer& 
 
 preferences::secure_buffer prefs::aes_decrypt(const preferences::secure_buffer& encrypted, const preferences::secure_buffer& key)
 {
-#ifndef __APPLE__
+#if defined(HEADLESS_ENGINE)
+	(void)key;
+	return encrypted;
+#elif !defined(__APPLE__)
 	int update_length;
 	int extra_length;
 	int total_length;

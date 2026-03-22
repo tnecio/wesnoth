@@ -19,7 +19,14 @@
 
 #include "utils/optional_fwd.hpp"
 
+#ifndef __EMSCRIPTEN__
 #include <boost/program_options/options_description.hpp>
+#else
+#include <stdexcept>
+namespace boost { namespace program_options {
+	struct error : std::runtime_error { using std::runtime_error::runtime_error; };
+} }
+#endif
 #include <iosfwd>                       // for ostream
 #include <string>                       // for string
 #include <tuple>
@@ -265,7 +272,9 @@ private:
 	std::vector<std::tuple<unsigned int,std::string,std::string>> parse_to_uint_string_string_tuples_(const std::vector<std::string> &strings, char separator = ':');
 	std::vector<std::string> args_;
 	std::string args0_;
+#ifndef __EMSCRIPTEN__
 	boost::program_options::options_description all_;
 	boost::program_options::options_description visible_;
 	boost::program_options::options_description hidden_;
+#endif
 };

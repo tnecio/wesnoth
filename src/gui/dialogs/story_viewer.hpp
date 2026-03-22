@@ -15,6 +15,38 @@
 
 #pragma once
 
+#ifdef HEADLESS_ENGINE
+// Headless/WASM build: story_viewer::display emits WL events instead of
+// showing a GUI dialog.  No storyscreen or gui dependencies needed.
+#include "config.hpp"
+#include "wl_hooks.hpp"
+#include <string>
+
+namespace gui2::dialogs {
+
+class story_viewer {
+public:
+	static void display(const std::string& scenario_name, const config& story)
+	{
+		std::string last_music;
+		for(const config& part : story.child_range("part")) {
+			const std::string music = part["music"].str();
+			if(!music.empty() && music != last_music) {
+				wl_hook_music_change(music);
+				last_music = music;
+			}
+			std::string title = part["title"].str();
+			if(title.empty() && part["show_title"].to_bool(false))
+				title = scenario_name;
+			wl_hook_story_part(title, part["story"].str(), part["background"].str());
+		}
+	}
+};
+
+} // namespace gui2::dialogs
+
+#else // !HEADLESS_ENGINE
+
 #include "gui/dialogs/modal_dialog.hpp"
 
 #include "config.hpp"
@@ -98,3 +130,5 @@ private:
 };
 
 } // namespace dialogs
+
+#endif // HEADLESS_ENGINE
