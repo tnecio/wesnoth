@@ -40,14 +40,14 @@ vcpkg provides compiled Boost libraries for WASM (Emscripten's own Boost port is
 headers-only).
 
 ```bash
-git clone https://github.com/microsoft/vcpkg.git /usr/local/vcpkg
-/usr/local/vcpkg/bootstrap-vcpkg.sh
+git clone https://github.com/microsoft/vcpkg.git /vcpkg
+/vcpkg/bootstrap-vcpkg.sh
 ```
 
 Set `VCPKG_ROOT` so the configure script can find vcpkg:
 
 ```bash
-export VCPKG_ROOT=/usr/local/vcpkg
+export VCPKG_ROOT=/vcpkg
 ```
 
 Install the required Boost components.  Run from any directory outside the
@@ -101,7 +101,7 @@ used directly for local testing.  No separate install step is required.
 
 ```bash
 cd /wesnoth_wl
-export VCPKG_ROOT=/usr/local/vcpkg   # adjust if vcpkg is elsewhere
+export VCPKG_ROOT=/vcpkg   # adjust if vcpkg is elsewhere
 source /emsdk/emsdk_env.sh           # activate Emscripten in current shell
 bash wesnothlite/configure_wasm.sh   # runs cmake configure into build-wasm/
 ```

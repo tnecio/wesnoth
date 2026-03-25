@@ -52,6 +52,7 @@ pump_monitor::~pump_monitor() {}
 // Global functions
 void focus_handler(const sdl_handler*) {}
 bool has_focus(const sdl_handler*, const SDL_Event*) { return false; }
+void set_main_thread() {}
 bool is_in_main_thread() { return true; }
 void call_in_main_thread(const std::function<void()>& f) { f(); }
 void pump() {}

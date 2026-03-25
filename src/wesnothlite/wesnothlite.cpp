@@ -10,6 +10,7 @@
 #include "actions/move.hpp"
 #include "actions/undo.hpp"
 #include "commandline_options.hpp"
+#include "events.hpp"
 #include "filesystem.hpp"
 #include "gettext.hpp"
 #include "game_board.hpp"
@@ -1069,6 +1070,10 @@ WL_Engine* wl_init(const char* data_path, const char* userdata_path)
         std::string udata = userdata_path ? userdata_path
                                           : "/tmp/wesnothlite_userdata";
         filesystem::set_user_data_dir(udata);
+
+        // Mark this thread as the Wesnoth "main" thread so that
+        // events::call_in_main_thread() runs tasks inline (no SDL event loop).
+        events::set_main_thread();
 
         video::init(video::fake::no_window);
 

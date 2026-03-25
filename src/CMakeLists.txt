@@ -358,6 +358,7 @@ if(EMSCRIPTEN)
 	)
 	target_link_options(wesnothlite PRIVATE
 		-sMODULARIZE=1
+		-sEXPORT_ES6=1
 		-sEXPORT_NAME=WesnothLite
 		-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,setValue,getValue,FS
 		-sFORCE_FILESYSTEM=1
