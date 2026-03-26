@@ -9,7 +9,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 /** Post a WL_EVENT_STORY event for one story screen part. */
 void wl_hook_story_part(const std::string& title,
@@ -19,11 +18,3 @@ void wl_hook_story_part(const std::string& title,
 /** Post a WL_EVENT_MUSIC_CHANGE event. */
 void wl_hook_music_change(const std::string& path,
                           const std::string& title = "");
-
-/** Post a WL_EVENT_CHOICE_NEEDED (kind=WL_CHOICE_MESSAGE) and block the game
- *  thread until the player dismisses or picks an option.
- *  Returns the chosen option index (0-based; 0 for plain dismiss). */
-int wl_hook_message(const std::string& speaker,
-                    const std::string& portrait,
-                    const std::string& text,
-                    const std::vector<std::string>& options);

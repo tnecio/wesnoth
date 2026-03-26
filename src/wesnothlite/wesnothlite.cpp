@@ -205,51 +205,6 @@ void wl_hook_music_change(const std::string& path,
     tl_channel->post_event(std::move(ev));
 }
 
-int wl_hook_message(const std::string& speaker,
-                    const std::string& portrait,
-                    const std::string& text,
-                    const std::vector<std::string>& options)
-{
-    if(!tl_channel) return 0;
-    /* Post CHOICE_NEEDED with kind=MESSAGE and block until the player
-       dismisses / picks an option.  An empty options vector means "dismiss". */
-    std::vector<std::string> opts = options.empty()
-                                        ? std::vector<std::string>{""}
-                                        : options;
-    return tl_channel->request_choice(
-        WL_CHOICE_MESSAGE, text, opts, speaker, portrait);
-}
-
-/* ── Image path resolution ────────────────────────────────────────────────
- * The data root for the current session (e.g. "/game/data").  Set once in
- * wl_init so that resolve_img() can strip the prefix.
- */
-static std::string g_data_root;
-
-/** Resolve a WML-relative image path to a URL-friendly path under the game
- *  data root (e.g. "core/images/units/knight.png" or
- *  "campaigns/Two_Brothers/images/units/arvith.png").
- *  Falls back to "core/images/<base>" if the file cannot be located. */
-static std::string resolve_img(const std::string& rel)
-{
-    if(rel.empty()) return rel;
-    /* Strip Wesnoth image modifiers (~BLIT, ~CROP, etc.) */
-    std::string base = rel.substr(0, rel.find('~'));
-    if(base.empty()) return rel;
-    auto opt = filesystem::get_binary_file_location("images", base);
-    if(!opt) return "core/images/" + base;
-    std::string full = *opt;
-    /* Strip data-root prefix to get a URL-friendly relative path */
-    if(!g_data_root.empty()) {
-        const std::string prefix = g_data_root + "/";
-        if(full.size() > prefix.size() &&
-           full.substr(0, prefix.size()) == prefix) {
-            return full.substr(prefix.size());
-        }
-    }
-    return full;
-}
-
 /**
  * wesnoth.wl_request_choice(kind, prompt, options...)
  *
@@ -837,8 +792,6 @@ static WL_Event* materialize_event(const WLEventInternal& d,
     case WL_EVENT_CHOICE_NEEDED: {
         ev.choice_needed.kind    = d.choice_kind;
         ev.choice_needed.prompt  = store(d.s1);
-        ev.choice_needed.speaker  = store(d.s2);
-        ev.choice_needed.portrait = store(d.s3);
         int n = std::min((int)d.options.size(), WL_MAX_OPTIONS);
         for(int i = 0; i < n; ++i)
             ev.choice_needed.options[i] = store(d.options[i]);
@@ -932,9 +885,7 @@ static WL_Event* materialize_event(const WLEventInternal& d,
         ev.objectives_update.text = relocate(ev.objectives_update.text);
         break;
     case WL_EVENT_CHOICE_NEEDED: {
-        ev.choice_needed.prompt   = relocate(ev.choice_needed.prompt);
-        ev.choice_needed.speaker  = relocate(ev.choice_needed.speaker);
-        ev.choice_needed.portrait = relocate(ev.choice_needed.portrait);
+        ev.choice_needed.prompt = relocate(ev.choice_needed.prompt);
         for(int i = 0; i < ev.choice_needed.n_options; ++i)
             ev.choice_needed.options[i] = relocate(ev.choice_needed.options[i]);
         break;
@@ -1050,8 +1001,8 @@ static void fill_wl_unit(WL_Unit& out, const unit& u, WLArena& arena)
     out.id        = arena.store(u.id());
     out.type_id   = arena.store(u.type_id());
     out.name      = arena.store(u.name().str());
-    out.portrait  = arena.store(resolve_img(u.big_profile()));
-    out.sprite    = arena.store(resolve_img(u.absolute_image()));
+    out.portrait  = arena.store(u.big_profile());
+    out.sprite    = arena.store(u.absolute_image());
     out.side      = u.side();
     out.loc       = { u.get_location().wml_x(), u.get_location().wml_y() };
 
@@ -1152,8 +1103,6 @@ WL_Engine* wl_init(const char* data_path, const char* userdata_path)
             if(sep != std::string::npos) root = root.substr(0, sep);
         }
         game_config::path = root;
-        /* Store the game data root for image URL resolution (e.g. "/game/data") */
-        g_data_root = root + "/data";
 
         std::string udata = userdata_path ? userdata_path
                                           : "/tmp/wesnothlite_userdata";
@@ -1759,25 +1708,7 @@ WL_MapData* wl_query_map(WL_Engine* engine)
             t.category     = terrain_category(tt);
             t.id           = arena.store(tt.id());
             t.name         = arena.store(tt.name().str());
-            t.icon         = arena.store(resolve_img(tt.editor_image()));
-            /* Expose overlay terrain icon (e.g. village building on grass) */
-            {
-                std::string overlay_img;
-                const std::string& tid = tt.id();
-                auto caret = tid.find('^');
-                if(caret != std::string::npos) {
-                    try {
-                        auto ov_str = "^" + tid.substr(caret + 1);
-                        auto ov_tc  = t_translation::read_terrain_code(ov_str);
-                        if(ov_tc != t_translation::NONE_TERRAIN) {
-                            const terrain_type& ot =
-                                resources::gameboard->map().get_terrain_info(ov_tc);
-                            overlay_img = resolve_img(ot.editor_image());
-                        }
-                    } catch(...) {}
-                }
-                t.overlay_icon = arena.store(overlay_img);
-            }
+            t.icon         = arena.store(tt.editor_image());
             t.village_side = m.is_village(loc)
                                  ? resources::gameboard->village_owner(loc) + 1
                                  : 0;

@@ -375,9 +375,6 @@ typedef struct WL_Event {
              */
             const char*   options[WL_MAX_OPTIONS];
             int           n_options;
-            /** WL_CHOICE_MESSAGE only: speaker name and portrait image path. */
-            const char*   speaker;
-            const char*   portrait;
         } choice_needed;
 
         struct { const char* path; } sound;
@@ -493,7 +490,6 @@ typedef struct {
     const char*        id;
     const char*        name;
     const char*        icon;
-    const char*        overlay_icon;  /**< Editor image of overlay terrain (e.g. village building), or "" if none. */
     int                village_side;
     int                starting_side;
 } WL_Terrain;
