@@ -211,6 +211,7 @@ typedef struct {
 
 typedef enum {
     /* Scenario lifecycle */
+    WL_EVENT_LOADING_CONFIG,   /* emitted by game thread before config parse */
     WL_EVENT_SCENARIO_START,
     WL_EVENT_SCENARIO_END,
 

@@ -259,6 +259,11 @@ struct WLEngineImpl {
 
     /* Last error string. */
     std::string last_error;
+
+    /* Set by wl_start_campaign / wl_start_scenario: game thread must finish
+     * config load + scenario init before running.  Clear after use. */
+    bool        needs_scenario_init = false;
+    std::string pending_scenario_id;
 };
 
 /* Expose the opaque C type as an alias so we can use the pointer directly. */

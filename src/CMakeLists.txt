@@ -363,6 +363,7 @@ if(EMSCRIPTEN)
 		-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,setValue,getValue,FS
 		-sFORCE_FILESYSTEM=1
 		-lnodefs.js
+		-lidbfs.js
 		-sALLOW_MEMORY_GROWTH=1
 		-sSTACK_SIZE=5242880
 		-sINITIAL_MEMORY=67108864

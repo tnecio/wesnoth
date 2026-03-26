@@ -508,6 +508,43 @@ static void run_game_thread(WLEngineImpl* e)
     try {
         saved_game& state = *e->state;
 
+        /* ── Deferred heavy setup (moved off the API/JS thread) ─────────────
+         * Emit LOADING_CONFIG immediately so the JS side can show a status
+         * message while we do the slow WML parse. */
+        {
+            WLEventInternal ev;
+            ev.type = WL_EVENT_LOADING_CONFIG;
+            ch.post_event(std::move(ev));
+        }
+
+        e->config_manager->load_game_config_for_game(
+            state.classification(),
+            e->needs_scenario_init ? e->pending_scenario_id
+                                   : state.get_scenario_id());
+
+        if(e->needs_scenario_init) {
+            const std::string& sid = e->pending_scenario_id;
+            config scenario_cfg;
+            for(const config& sc :
+                    e->config_manager->game_config().child_range("scenario")) {
+                if(sc["id"].str() == sid) { scenario_cfg = sc; break; }
+            }
+            if(scenario_cfg.empty()) {
+                e->last_error = std::string("scenario not found: ") + sid;
+                WLEventInternal ev;
+                ev.type    = WL_EVENT_SCENARIO_END;
+                ev.outcome = WL_OUTCOME_QUIT;
+                ch.post_event(std::move(ev));
+                tl_channel = nullptr;
+                ch.set_done();
+                return;
+            }
+            state.set_scenario(scenario_cfg);
+            state.set_defaults();
+            e->needs_scenario_init = false;
+        }
+        /* ── End deferred setup ──────────────────────────────────────────── */
+
         state.expand_scenario();
         state.expand_random_scenario();
         state.expand_mp_events();
@@ -1273,27 +1310,10 @@ static WL_Status setup_scenario(WLEngineImpl& e,
         }
     }
 
-    e.config_manager->load_game_config_for_game(
-        state.classification(), first);
-
-    config scenario_cfg;
-    for(const config& sc :
-            e.config_manager->game_config().child_range("scenario")) {
-        if(sc["id"].str() == first) { scenario_cfg = sc; break; }
-    }
-
-    if(scenario_cfg.empty()) {
-        e.last_error = std::string("scenario not found: ") + first;
-        return WL_ERR_UNKNOWN;
-    }
-
-    state.set_scenario(scenario_cfg);
-    /* set_defaults() converts the old-style inline leader in [side] (e.g.
-     * type=Knight id=Arvith canrecruit=yes) into a [leader] sub-tag, which
-     * team_builder::leader() requires.  It is normally called from
-     * expand_scenario(), but we bypass that by calling set_scenario()
-     * directly, so we must call it explicitly here. */
-    state.set_defaults();
+    /* The heavy work (load_game_config_for_game + scenario init) is deferred
+     * to run_game_thread() so it doesn't block the API/JS thread. */
+    e.pending_scenario_id = first;
+    e.needs_scenario_init = true;
     return WL_OK;
 }
 
@@ -1356,9 +1376,7 @@ WL_Status wl_load_save(WL_Engine* engine, const char* save_path)
         load_data.filename = filesystem::base_name(save_path);
         load_data.read_file();
         savegame::set_gamestate(*e.state, load_data);
-        e.config_manager->load_game_config_for_game(
-            e.state->classification(),
-            e.state->get_scenario_id());
+        e.needs_scenario_init = false;  /* state fully set; game thread only needs config load */
         launch_game_thread(e);
         return WL_OK;
     } catch(const std::exception& ex) {
@@ -1389,10 +1407,7 @@ WL_Status wl_load_from_buffer(WL_Engine* engine,
         load_data.filename = filesystem::base_name(tmp);
         load_data.read_file();
         savegame::set_gamestate(*e.state, load_data);
-        e.config_manager->load_game_config_for_game(
-            e.state->classification(),
-            e.state->get_scenario_id());
-
+        e.needs_scenario_init = false;  /* state fully set; game thread only needs config load */
         filesystem::delete_file(tmp);
         launch_game_thread(e);
         return WL_OK;
