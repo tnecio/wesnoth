@@ -59,6 +59,32 @@ static lg::log_domain log_wl("wesnothlite");
 #define ERR_WL  LOG_STREAM(err,   log_wl)
 
 /* =========================================================================
+ * Image path resolver
+ * Converts a bare image name (as returned by absolute_image / editor_image)
+ * to a path relative to the game data root, searching across all data dirs
+ * (core + campaigns).  The result can be served directly as /data/data/<rel>.
+ * ========================================================================= */
+static std::string g_data_root;
+
+static std::string resolve_img(const std::string& rel)
+{
+    if(rel.empty()) return rel;
+    // Strip any Wesnoth compositor suffix (~BLIT, ~RC, etc.)
+    std::string base = rel.substr(0, rel.find('~'));
+    if(base.empty()) return rel;
+    auto opt = filesystem::get_binary_file_location("images", base);
+    if(!opt) return "core/images/" + base;   // fallback for core assets
+    std::string full = *opt;
+    if(!g_data_root.empty()) {
+        const std::string prefix = g_data_root + "/";
+        if(full.size() > prefix.size() &&
+           full.substr(0, prefix.size()) == prefix)
+            return full.substr(prefix.size());
+    }
+    return full;
+}
+
+/* =========================================================================
  * Thread-local channel pointer
  * Used by the Lua-callable C functions to post events to the channel.
  * ========================================================================= */
@@ -1001,8 +1027,8 @@ static void fill_wl_unit(WL_Unit& out, const unit& u, WLArena& arena)
     out.id        = arena.store(u.id());
     out.type_id   = arena.store(u.type_id());
     out.name      = arena.store(u.name().str());
-    out.portrait  = arena.store(u.big_profile());
-    out.sprite    = arena.store(u.absolute_image());
+    out.portrait  = arena.store(resolve_img(u.big_profile()));
+    out.sprite    = arena.store(resolve_img(u.absolute_image()));
     out.side      = u.side();
     out.loc       = { u.get_location().wml_x(), u.get_location().wml_y() };
 
@@ -1103,6 +1129,7 @@ WL_Engine* wl_init(const char* data_path, const char* userdata_path)
             if(sep != std::string::npos) root = root.substr(0, sep);
         }
         game_config::path = root;
+        g_data_root = root + "/data";  // images live under <root>/data/, not <root>/
 
         std::string udata = userdata_path ? userdata_path
                                           : "/tmp/wesnothlite_userdata";
@@ -1708,7 +1735,7 @@ WL_MapData* wl_query_map(WL_Engine* engine)
             t.category     = terrain_category(tt);
             t.id           = arena.store(tt.id());
             t.name         = arena.store(tt.name().str());
-            t.icon         = arena.store(tt.editor_image());
+            t.icon         = arena.store(resolve_img(tt.editor_image()));
             t.village_side = m.is_village(loc)
                                  ? resources::gameboard->village_owner(loc) + 1
                                  : 0;
