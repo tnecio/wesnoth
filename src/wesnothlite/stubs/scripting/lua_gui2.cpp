@@ -16,26 +16,47 @@ static lg::log_domain log_lua_gui("scripting/lua/gui");
 
 namespace lua_gui2 {
 
-// Print the message from a narration/message config table:
-//   gui.show_narration({ title=..., message=..., portrait=... })
-// arg 1 is the config table, arg 2 (optional) is an options array.
+// Show a WML message/narration dialog.
+//   gui.show_narration({ title=..., message=..., portrait=... }, options_array)
+// arg 1 is the config table, arg 2 (optional) is an array of option strings.
 int show_message_dialog(lua_State* L) {
-    std::string speaker, message;
+    std::string speaker, portrait, message;
     if(lua_istable(L, 1)) {
-        lua_getfield(L, 1, "title");
-        if(lua_isstring(L, -1)) speaker = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        lua_getfield(L, 1, "message");
-        if(lua_isstring(L, -1)) message = lua_tostring(L, -1);
-        lua_pop(L, 1);
+        auto get_str = [&](const char* key) -> std::string {
+            lua_getfield(L, 1, key);
+            std::string v = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_pop(L, 1);
+            return v;
+        };
+        speaker  = get_str("title");
+        portrait = get_str("portrait");
+        message  = get_str("message");
     }
-    if(!speaker.empty() || !message.empty()) {
-        if(!speaker.empty())
-            std::cout << "[MSG] " << speaker << ": " << message << "\n" << std::flush;
-        else
-            std::cout << "[MSG] " << message << "\n" << std::flush;
+    /* Collect options from arg 2 (table) */
+    std::vector<std::string> options;
+    if(lua_istable(L, 2)) {
+        lua_Integer n = luaL_len(L, 2);
+        for(lua_Integer i = 1; i <= n; ++i) {
+            lua_rawgeti(L, 2, i);
+            if(lua_istable(L, -1)) {
+                lua_getfield(L, -1, "label");
+                if(lua_isstring(L, -1)) options.push_back(lua_tostring(L, -1));
+                lua_pop(L, 1);
+            } else if(lua_isstring(L, -1)) {
+                options.push_back(lua_tostring(L, -1));
+            }
+            lua_pop(L, 1);
+        }
     }
-    lua_pushinteger(L, 0);
+    /* Skip empty messages (no speaker and no text) */
+    if(message.empty() && speaker.empty()) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
+    /* Resolve portrait path (it's a WML image path) */
+    // wl_hook_message handles posting the blocking choice event
+    int result = wl_hook_message(speaker, portrait, message, options);
+    lua_pushinteger(L, result);
     return 1;
 }
 
@@ -66,7 +87,11 @@ int show_story(lua_State* L) {
                     if(lua_toboolean(L, -1)) title = scenario_name;
                     lua_pop(L, 1);
                 }
-                wl_hook_story_part(title, get("text"), get("background"));
+                std::string text = get("text");
+                /* Skip empty story parts (no title AND no text) */
+                if(!title.empty() || !text.empty()) {
+                    wl_hook_story_part(title, text, get("background"));
+                }
             }
             lua_pop(L, 1);
         }
