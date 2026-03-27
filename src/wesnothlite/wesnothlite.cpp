@@ -129,12 +129,11 @@ static int lua_post_move(lua_State* L)
     return 0;
 }
 
-/* wesnoth.wl_post_recruit(type_id, unit_id, side, x, y) */
-static int lua_post_recruit(lua_State* L)
+static int spawn_internal(lua_State* L)
 {
     if(!tl_channel) return 0;
     WLEventInternal ev;
-    ev.type = WL_EVENT_UNIT_RECRUIT;
+    ev.type = WL_EVENT_UNIT_SPAWN;
     ev.s1   = luaL_optstring(L, 1, "");   /* type_id */
     ev.s2   = luaL_optstring(L, 2, "");   /* unit_id */
     ev.i1   = (int)luaL_optinteger(L, 3, 0);
@@ -144,19 +143,16 @@ static int lua_post_recruit(lua_State* L)
     return 0;
 }
 
+/* wesnoth.wl_post_recruit(type_id, unit_id, side, x, y) */
+static int lua_post_recruit(lua_State* L)
+{
+    return spawn_internal(L);
+}
+
 /* wesnoth.wl_post_recall(unit_id, type_id, side, x, y) */
 static int lua_post_recall(lua_State* L)
 {
-    if(!tl_channel) return 0;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_UNIT_RECALL;
-    ev.s1   = luaL_optstring(L, 1, "");
-    ev.s2   = luaL_optstring(L, 2, "");
-    ev.i1   = (int)luaL_optinteger(L, 3, 0);
-    ev.loc1 = { (int)luaL_optinteger(L, 4, 0),
-                (int)luaL_optinteger(L, 5, 0) };
-    tl_channel->post_event(std::move(ev));
-    return 0;
+    return spawn_internal(L);
 }
 
 /* wesnoth.wl_post_die(unit_id, type_id, side, x, y, killer_id) */
@@ -744,18 +740,11 @@ static WL_Event* materialize_event(const WLEventInternal& d,
         }
         break;
 
-    case WL_EVENT_UNIT_RECRUIT:
-        ev.unit_recruit.unit_type_id = store(d.s1);
-        ev.unit_recruit.unit_id      = store(d.s2);
-        ev.unit_recruit.side         = d.i1;
-        ev.unit_recruit.at           = d.loc1;
-        break;
-
-    case WL_EVENT_UNIT_RECALL:
-        ev.unit_recall.unit_id      = store(d.s1);
-        ev.unit_recall.unit_type_id = store(d.s2);
-        ev.unit_recall.side         = d.i1;
-        ev.unit_recall.at           = d.loc1;
+    case WL_EVENT_UNIT_SPAWN:
+        ev.unit_spawn.unit_type_id = store(d.s1);
+        ev.unit_spawn.unit_id      = store(d.s2);
+        ev.unit_spawn.side         = d.i1;
+        ev.unit_spawn.at           = d.loc1;
         break;
 
     case WL_EVENT_UNIT_DISMISS:
@@ -878,13 +867,9 @@ static WL_Event* materialize_event(const WLEventInternal& d,
         ev.unit_attack.attacker_id = relocate(ev.unit_attack.attacker_id);
         ev.unit_attack.defender_id = relocate(ev.unit_attack.defender_id);
         break;
-    case WL_EVENT_UNIT_RECRUIT:
-        ev.unit_recruit.unit_type_id = relocate(ev.unit_recruit.unit_type_id);
-        ev.unit_recruit.unit_id      = relocate(ev.unit_recruit.unit_id);
-        break;
-    case WL_EVENT_UNIT_RECALL:
-        ev.unit_recall.unit_id      = relocate(ev.unit_recall.unit_id);
-        ev.unit_recall.unit_type_id = relocate(ev.unit_recall.unit_type_id);
+    case WL_EVENT_UNIT_SPAWN:
+        ev.unit_spawn.unit_type_id = relocate(ev.unit_spawn.unit_type_id);
+        ev.unit_spawn.unit_id      = relocate(ev.unit_spawn.unit_id);
         break;
     case WL_EVENT_UNIT_DISMISS:
         ev.unit_dismiss.unit_id      = relocate(ev.unit_dismiss.unit_id);

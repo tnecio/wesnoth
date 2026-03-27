@@ -119,18 +119,11 @@ static void print_event(const WL_Event* ev)
         break;
     }
 
-    case WL_EVENT_UNIT_RECRUIT:
-        printf("[EVENT] unit_recruit type=%s id=%s side=%d at=(%d,%d)\n",
-               ev->unit_recruit.unit_type_id, ev->unit_recruit.unit_id,
-               ev->unit_recruit.side,
-               ev->unit_recruit.at.x, ev->unit_recruit.at.y);
-        break;
-
-    case WL_EVENT_UNIT_RECALL:
-        printf("[EVENT] unit_recall id=%s type=%s side=%d at=(%d,%d)\n",
-               ev->unit_recall.unit_id, ev->unit_recall.unit_type_id,
-               ev->unit_recall.side,
-               ev->unit_recall.at.x, ev->unit_recall.at.y);
+    case WL_EVENT_UNIT_SPAWN:
+        printf("[EVENT] unit_spawn type=%s id=%s side=%d at=(%d,%d)\n",
+               ev->unit_spawn.unit_type_id, ev->unit_spawn.unit_id,
+               ev->unit_spawn.side,
+               ev->unit_spawn.at.x, ev->unit_spawn.at.y);
         break;
 
     case WL_EVENT_UNIT_DISMISS:

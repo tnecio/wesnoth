@@ -224,8 +224,7 @@ typedef enum {
     /* Unit actions */
     WL_EVENT_UNIT_MOVE,
     WL_EVENT_UNIT_ATTACK,
-    WL_EVENT_UNIT_RECRUIT,
-    WL_EVENT_UNIT_RECALL,
+    WL_EVENT_UNIT_SPAWN,
     WL_EVENT_UNIT_DISMISS,
     WL_EVENT_UNIT_DIE,
     WL_EVENT_UNIT_ADVANCE,
@@ -243,6 +242,19 @@ typedef enum {
     /* Audio */
     WL_EVENT_SOUND,
     WL_EVENT_MUSIC_CHANGE,
+
+    /* Graphics and animation */
+    WL_EVENT_DELAY,
+    WL_EVENT_ANIMATE,
+    WL_EVENT_SCROLL,
+    WL_EVENT_HEX_OVERLAY,
+    WL_EVENT_SCREEN_OVERLAY,
+
+    /* State update notifications */
+    WL_EVENT_HEX_UPDATE,
+    WL_EVENT_UNIT_UPDATE,
+    WL_EVENT_TEAM_UPDATE,
+    WL_EVENT_MAP_UPDATE,
 } WL_EventType;
 
 
@@ -288,14 +300,7 @@ typedef struct WL_Event {
             const char* unit_id;
             int         side;
             WL_Loc      at;
-        } unit_recruit;
-
-        struct {
-            const char* unit_id;
-            const char* unit_type_id;
-            int         side;
-            WL_Loc      at;
-        } unit_recall;
+        } unit_spawn;
 
         struct {
             const char* unit_id;
