@@ -8,34 +8,48 @@
 #include "log.hpp"
 #include "lua/lauxlib.h"
 #include "wl_hooks.hpp"
-#include <iostream>
 #include <string>
+#include <vector>
 
 static lg::log_domain log_lua_gui("scripting/lua/gui");
 #define LOG_LUA LOG_STREAM(info, log_lua_gui)
 
 namespace lua_gui2 {
 
-// Print the message from a narration/message config table:
-//   gui.show_narration({ title=..., message=..., portrait=... })
-// arg 1 is the config table, arg 2 (optional) is an options array.
+// Forward WML [message] dialogs through wl_hook_message so the game thread
+// blocks until the player dismisses the dialog.
+// arg 1: config table { title=speaker, message=text, portrait=... }
+// arg 2 (optional): array of option strings
 int show_message_dialog(lua_State* L) {
+    auto get_field = [&](int idx, const char* key) -> std::string {
+        lua_getfield(L, idx, key);
+        std::string v = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+        lua_pop(L, 1);
+        return v;
+    };
+
     std::string speaker, message;
     if(lua_istable(L, 1)) {
-        lua_getfield(L, 1, "title");
-        if(lua_isstring(L, -1)) speaker = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        lua_getfield(L, 1, "message");
-        if(lua_isstring(L, -1)) message = lua_tostring(L, -1);
-        lua_pop(L, 1);
+        speaker = get_field(1, "title");
+        message = get_field(1, "message");
     }
-    if(!speaker.empty() || !message.empty()) {
-        if(!speaker.empty())
-            std::cout << "[MSG] " << speaker << ": " << message << "\n" << std::flush;
-        else
-            std::cout << "[MSG] " << message << "\n" << std::flush;
+    if(message.empty() && speaker.empty()) {
+        lua_pushinteger(L, 0);
+        return 1;
     }
-    lua_pushinteger(L, 0);
+
+    std::vector<std::string> options;
+    if(lua_istable(L, 2)) {
+        lua_Integer n = luaL_len(L, 2);
+        for(lua_Integer i = 1; i <= n; ++i) {
+            lua_rawgeti(L, 2, i);
+            if(lua_isstring(L, -1)) options.push_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+
+    int result = wl_hook_message(speaker, message, options);
+    lua_pushinteger(L, result);
     return 1;
 }
 

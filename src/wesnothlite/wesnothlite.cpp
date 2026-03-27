@@ -231,6 +231,17 @@ void wl_hook_music_change(const std::string& path,
     tl_channel->post_event(std::move(ev));
 }
 
+int wl_hook_message(const std::string& speaker,
+                    const std::string& text,
+                    const std::vector<std::string>& options)
+{
+    if(!tl_channel) return 0;
+    std::vector<std::string> opts = options.empty()
+        ? std::vector<std::string>{""}   /* "Continue" */
+        : options;
+    return tl_channel->request_choice(WL_CHOICE_MESSAGE, text, opts, speaker);
+}
+
 /**
  * wesnoth.wl_request_choice(kind, prompt, options...)
  *
@@ -822,6 +833,7 @@ static WL_Event* materialize_event(const WLEventInternal& d,
         for(int i = 0; i < n; ++i)
             ev.choice_needed.options[i] = store(d.options[i]);
         ev.choice_needed.n_options = n;
+        ev.choice_needed.speaker   = store(d.s2);
         break;
     }
 
@@ -911,9 +923,10 @@ static WL_Event* materialize_event(const WLEventInternal& d,
         ev.objectives_update.text = relocate(ev.objectives_update.text);
         break;
     case WL_EVENT_CHOICE_NEEDED: {
-        ev.choice_needed.prompt = relocate(ev.choice_needed.prompt);
+        ev.choice_needed.prompt  = relocate(ev.choice_needed.prompt);
         for(int i = 0; i < ev.choice_needed.n_options; ++i)
             ev.choice_needed.options[i] = relocate(ev.choice_needed.options[i]);
+        ev.choice_needed.speaker = relocate(ev.choice_needed.speaker);
         break;
     }
     case WL_EVENT_SOUND:
@@ -1086,9 +1099,15 @@ static void fill_wl_unit(WL_Unit& out, const unit& u, WLArena& arena)
 
 static WL_TerrainCategory terrain_category(const terrain_type& tt)
 {
-    const std::string& id = tt.id();
-    if(id.empty()) return WL_TERRAIN_OTHER;
-    char c = id[0];
+    if(tt.is_village()) return WL_TERRAIN_VILLAGE;
+    if(tt.is_castle() || tt.is_keep()) return WL_TERRAIN_CASTLE;
+
+    // Fall back to the terrain string code for other categories.
+    // tt.id() returns the WML config id (e.g. "human_keep"), NOT the terrain
+    // code string ("Kh"), so use write_terrain_code on the type's number instead.
+    const std::string str = t_translation::write_terrain_code(tt.number());
+    if(str.empty()) return WL_TERRAIN_OTHER;
+    char c = str[0];
     switch(c) {
     case 'G': case 'R': case 'D': case 'S':
         return WL_TERRAIN_FLAT;
@@ -1100,10 +1119,6 @@ static WL_TerrainCategory terrain_category(const terrain_type& tt)
         return WL_TERRAIN_MOUNTAINS;
     case 'W':
         return WL_TERRAIN_WATER_SHALLOW;
-    case 'V':
-        return WL_TERRAIN_VILLAGE;
-    case 'C': case 'K':
-        return WL_TERRAIN_CASTLE;
     case 'U':
         return WL_TERRAIN_UNWALKABLE;
     }
@@ -1718,7 +1733,25 @@ WL_MapData* wl_query_map(WL_Engine* engine)
     const gamemap& m = resources::gameboard->map();
     int W = m.w(), H = m.h();
 
-    WLArena arena((size_t)(W * H) * 64);
+    /* Pre-scan string lengths to size the arena without reallocation.
+     * A reallocation mid-loop would invalidate the raw const char* pointers
+     * stored in terrains[] before the relocation pass. */
+    size_t arena_reserve = 0;
+    for(int y = 0; y < H; ++y) {
+        for(int x = 0; x < W; ++x) {
+            auto tc = m.get_terrain(map_location(x, y));
+            const terrain_type& tt =
+                resources::gameboard->map().get_terrain_info(tc);
+            arena_reserve += tt.id().size() + 1;
+            arena_reserve += tt.name().str().size() + 1;
+            arena_reserve += resolve_img(tt.editor_image()).size() + 1;
+            t_translation::terrain_code ov_tc(t_translation::NO_LAYER, tc.overlay);
+            const std::string ov_img =
+                resources::gameboard->map().get_terrain_info(ov_tc).editor_image();
+            arena_reserve += (ov_img.empty() ? 0 : resolve_img(ov_img).size()) + 1;
+        }
+    }
+    WLArena arena(arena_reserve);
 
     /* Pre-build terrain info. */
     std::vector<WL_Terrain> terrains((size_t)(W * H));
@@ -1736,6 +1769,13 @@ WL_MapData* wl_query_map(WL_Engine* engine)
             t.id           = arena.store(tt.id());
             t.name         = arena.store(tt.name().str());
             t.icon         = arena.store(resolve_img(tt.editor_image()));
+            {
+                t_translation::terrain_code ov_tc(t_translation::NO_LAYER, tc.overlay);
+                const terrain_type& ov_tt =
+                    resources::gameboard->map().get_terrain_info(ov_tc);
+                const std::string ov_img = ov_tt.editor_image();
+                t.overlay_icon = arena.store(ov_img.empty() ? std::string{} : resolve_img(ov_img));
+            }
             t.village_side = m.is_village(loc)
                                  ? resources::gameboard->village_owner(loc) + 1
                                  : 0;
@@ -1743,6 +1783,7 @@ WL_MapData* wl_query_map(WL_Engine* engine)
             for(int s = 1; s <= (int)resources::gameboard->teams().size(); ++s) {
                 if(m.starting_position(s) == loc) { t.starting_side = s; break; }
             }
+            t.is_keep = tt.is_keep() ? 1 : 0;
         }
     }
 
@@ -1769,9 +1810,10 @@ WL_MapData* wl_query_map(WL_Engine* engine)
     WL_Terrain* hex_arr = reinterpret_cast<WL_Terrain*>(buf + hdr_sz);
     for(int i = 0; i < W * H; ++i) {
         hex_arr[i] = terrains[(size_t)i];
-        hex_arr[i].id   = rel(hex_arr[i].id);
-        hex_arr[i].name = rel(hex_arr[i].name);
-        hex_arr[i].icon = rel(hex_arr[i].icon);
+        hex_arr[i].id           = rel(hex_arr[i].id);
+        hex_arr[i].name         = rel(hex_arr[i].name);
+        hex_arr[i].icon         = rel(hex_arr[i].icon);
+        hex_arr[i].overlay_icon = rel(hex_arr[i].overlay_icon);
     }
 
     return out;

@@ -160,12 +160,14 @@ struct WLChannel {
      */
     int request_choice(WL_ChoiceKind kind,
                        const std::string& prompt,
-                       const std::vector<std::string>& options)
+                       const std::vector<std::string>& options,
+                       const std::string& speaker = "")
     {
         WLEventInternal ev;
         ev.type        = WL_EVENT_CHOICE_NEEDED;
         ev.choice_kind = kind;
         ev.s1          = prompt;
+        ev.s2          = speaker;
         ev.options     = options;
         post_event(std::move(ev));
 

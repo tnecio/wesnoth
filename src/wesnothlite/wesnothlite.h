@@ -375,6 +375,7 @@ typedef struct WL_Event {
              */
             const char*   options[WL_MAX_OPTIONS];
             int           n_options;
+            const char*   speaker;  /**< Speaker name for WL_CHOICE_MESSAGE, or NULL. */
         } choice_needed;
 
         struct { const char* path; } sound;
@@ -490,8 +491,10 @@ typedef struct {
     const char*        id;
     const char*        name;
     const char*        icon;
+    const char*        overlay_icon;  /**< Overlay terrain sprite, or "" if none. */
     int                village_side;
     int                starting_side;
+    int                is_keep;       /**< 1 if this hex is a keep (leader must be here to recruit). */
 } WL_Terrain;
 
 typedef struct {
