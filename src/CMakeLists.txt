@@ -343,6 +343,11 @@ endif()
 if(EMSCRIPTEN)
 	add_executable(wesnothlite
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_snapshots.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_events.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_lua.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_controller.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_queries.cpp
 		${wesnoth_headless_sources}
 		${lua_headless_sources}
 		$<TARGET_OBJECTS:wesnothlite-stubs>
@@ -390,6 +395,11 @@ if(EMSCRIPTEN)
 else()
 	add_library(wesnothlite SHARED
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_snapshots.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_events.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_lua.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_controller.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_queries.cpp
 		${wesnoth_headless_sources}
 		${lua_headless_sources}
 		$<TARGET_OBJECTS:wesnothlite-stubs>

@@ -247,14 +247,7 @@ typedef enum {
     WL_EVENT_DELAY,
     WL_EVENT_ANIMATE,
     WL_EVENT_SCROLL,
-    WL_EVENT_HEX_OVERLAY,
     WL_EVENT_SCREEN_OVERLAY,
-
-    /* State update notifications */
-    WL_EVENT_HEX_UPDATE,
-    WL_EVENT_UNIT_UPDATE,
-    WL_EVENT_TEAM_UPDATE,
-    WL_EVENT_MAP_UPDATE,
 } WL_EventType;
 
 
@@ -272,6 +265,8 @@ typedef struct WL_Event {
         struct { int side; int turn; } side_turn_start;
         struct { int side; int turn; } side_turn_end;
         struct { int side; int turn; } waiting_for_input;
+
+        struct { int side; } team_update; /* caller should run wl_query_team */
 
         struct {
             const char* unit_id;
@@ -352,6 +347,11 @@ typedef struct WL_Event {
             int    old_side;
             int    new_side;
         } village_capture;
+
+        struct {
+            const char* unit_id;
+            WL_Loc loc;
+        } unit_update; /* caller should run wl_query_unit_at */
 
         struct {
             const char* speaker;
