@@ -58,7 +58,7 @@ typedef enum {
     WL_ERR_INVALID   = -2,  /**< Bad argument or precondition not met. */
     WL_ERR_NO_GAME   = -3,  /**< No scenario loaded yet. */
     WL_ERR_NOT_TURN  = -4,  /**< Not a human side's turn, or AI is playing. */
-    WL_ERR_BLOCKED   = -5,  /**< Awaiting wl_choose(); no other action allowed. */
+    WL_ERR_BLOCKED   = -5,  /**< Awaiting WL_CMD_CHOOSE; no other action allowed. */
     WL_ERR_NO_PATH   = -6,  /**< Unit cannot reach the target hex. */
     WL_ERR_NO_GOLD   = -7,  /**< Insufficient gold for recruit/recall. */
     WL_ERR_NO_SPACE  = -8,  /**< No adjacent castle hex available. */
@@ -204,6 +204,43 @@ typedef struct {
     int hp_start;
     int hp_end;          /**< 0 if killed. */
 } WL_CombatResult;
+
+/* =========================================================================
+ * Player-command struct
+ *
+ * WL_Command is the single message type sent from the API thread to the game
+ * thread.  Pass a populated WL_Command to wl_send() instead of calling the
+ * individual action functions.
+ *
+ * const char* fields (recruit.type_id, recall.unit_id, dismiss.unit_id) must
+ * remain valid until wl_send() returns.  wl_send() is synchronous — it blocks
+ * until the game thread processes the command — so a stack-allocated or
+ * heap-allocated string that outlives the call is sufficient.
+ * ========================================================================= */
+
+typedef enum {
+    WL_CMD_MOVE     = 0,
+    WL_CMD_ATTACK   = 1,
+    WL_CMD_RECRUIT  = 2,
+    WL_CMD_RECALL   = 3,
+    WL_CMD_DISMISS  = 4,
+    WL_CMD_END_TURN = 5,
+    WL_CMD_CHOOSE   = 6,
+    WL_CMD_UNDO     = 7,
+} WL_CmdType;
+
+typedef struct WL_Command {
+    WL_CmdType type;
+    union {
+        struct { WL_Loc from, to; }                  move;     /**< WL_CMD_MOVE    */
+        struct { WL_Loc att, def; int weapon; }      attack;   /**< WL_CMD_ATTACK  */
+        struct { const char* type_id; WL_Loc at; }  recruit;  /**< WL_CMD_RECRUIT */
+        struct { const char* unit_id; WL_Loc at; }  recall;   /**< WL_CMD_RECALL  */
+        struct { const char* unit_id; }              dismiss;  /**< WL_CMD_DISMISS */
+        struct { int option; }                       choose;   /**< WL_CMD_CHOOSE  */
+        /* WL_CMD_END_TURN and WL_CMD_UNDO carry no payload */
+    };
+} WL_Command;
 
 /* =========================================================================
  * Game-event struct
@@ -680,15 +717,17 @@ WL_API const WL_Event* wl_step(WL_Engine* engine);
 
 /* ── Player actions (valid only when wl_step() returned NULL) ──────────── */
 
-WL_API WL_Status wl_move(WL_Engine* engine, WL_Loc from, WL_Loc to);
-WL_API WL_Status wl_attack(WL_Engine* engine, WL_Loc attacker, WL_Loc defender,
-                             int weapon_index);
-WL_API WL_Status wl_recruit(WL_Engine* engine, const char* unit_type_id, WL_Loc at);
-WL_API WL_Status wl_recall(WL_Engine* engine, const char* unit_id, WL_Loc at);
-WL_API WL_Status wl_dismiss(WL_Engine* engine, const char* unit_id);
-WL_API WL_Status wl_end_turn(WL_Engine* engine);
-WL_API WL_Status wl_choose(WL_Engine* engine, int option_index);
-WL_API WL_Status wl_undo(WL_Engine* engine);
+/**
+ * Send a player command to the game thread.
+ *
+ * This is the single dispatch point for all player actions.  Populate a
+ * WL_Command struct and pass its address; the game thread processes it
+ * synchronously and the return value reflects the outcome.
+ *
+ * Valid only when the most recent wl_step() returned NULL (i.e., the engine
+ * is waiting for human input).
+ */
+WL_API WL_Status wl_send(WL_Engine* engine, const WL_Command* cmd);
 
 /* ── State queries ──────────────────────────────────────────────────────── */
 

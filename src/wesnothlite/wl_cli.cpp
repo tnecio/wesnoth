@@ -376,7 +376,8 @@ static bool dispatch_command(WL_Engine* eng, const std::string& line,
         if(!parse_loc(l1.c_str(), from) || !parse_loc(l2.c_str(), to)) {
             printf("usage: move X1,Y1 X2,Y2\n"); return true;
         }
-        WL_Status r = wl_move(eng, from, to);
+        WL_Command c{}; c.type = WL_CMD_MOVE; c.move.from = from; c.move.to = to;
+        WL_Status r = wl_send(eng, &c);
         printf("move -> %s\n", status_str(r));
         return true;
     }
@@ -388,7 +389,8 @@ static bool dispatch_command(WL_Engine* eng, const std::string& line,
         if(!parse_loc(l1.c_str(), att) || !parse_loc(l2.c_str(), def)) {
             printf("usage: attack X1,Y1 X2,Y2 [weapon_index]\n"); return true;
         }
-        WL_Status r = wl_attack(eng, att, def, wpn);
+        WL_Command c{}; c.type = WL_CMD_ATTACK; c.attack.att = att; c.attack.def = def; c.attack.weapon = wpn;
+        WL_Status r = wl_send(eng, &c);
         printf("attack -> %s\n", status_str(r));
         return true;
     }
@@ -399,7 +401,8 @@ static bool dispatch_command(WL_Engine* eng, const std::string& line,
         if(type.empty() || !parse_loc(lstr.c_str(), at)) {
             printf("usage: recruit TYPE X,Y\n"); return true;
         }
-        WL_Status r = wl_recruit(eng, type.c_str(), at);
+        WL_Command c{}; c.type = WL_CMD_RECRUIT; c.recruit.type_id = type.c_str(); c.recruit.at = at;
+        WL_Status r = wl_send(eng, &c);
         printf("recruit -> %s\n", status_str(r));
         return true;
     }
@@ -410,7 +413,8 @@ static bool dispatch_command(WL_Engine* eng, const std::string& line,
         if(id.empty() || !parse_loc(lstr.c_str(), at)) {
             printf("usage: recall ID X,Y\n"); return true;
         }
-        WL_Status r = wl_recall(eng, id.c_str(), at);
+        WL_Command c{}; c.type = WL_CMD_RECALL; c.recall.unit_id = id.c_str(); c.recall.at = at;
+        WL_Status r = wl_send(eng, &c);
         printf("recall -> %s\n", status_str(r));
         return true;
     }
@@ -418,26 +422,30 @@ static bool dispatch_command(WL_Engine* eng, const std::string& line,
     if(cmd == "dismiss") {
         std::string id; ss >> id;
         if(id.empty()) { printf("usage: dismiss ID\n"); return true; }
-        WL_Status r = wl_dismiss(eng, id.c_str());
+        WL_Command c{}; c.type = WL_CMD_DISMISS; c.dismiss.unit_id = id.c_str();
+        WL_Status r = wl_send(eng, &c);
         printf("dismiss -> %s\n", status_str(r));
         return true;
     }
 
     if(cmd == "end") {
-        WL_Status r = wl_end_turn(eng);
+        WL_Command c{}; c.type = WL_CMD_END_TURN;
+        WL_Status r = wl_send(eng, &c);
         printf("end_turn -> %s\n", status_str(r));
         return true;
     }
 
     if(cmd == "undo") {
-        WL_Status r = wl_undo(eng);
+        WL_Command c{}; c.type = WL_CMD_UNDO;
+        WL_Status r = wl_send(eng, &c);
         printf("undo -> %s\n", status_str(r));
         return true;
     }
 
     if(cmd == "choose") {
         int idx = 0; ss >> idx;
-        WL_Status r = wl_choose(eng, idx);
+        WL_Command c{}; c.type = WL_CMD_CHOOSE; c.choose.option = idx;
+        WL_Status r = wl_send(eng, &c);
         printf("choose -> %s\n", status_str(r));
         return true;
     }
@@ -581,10 +589,12 @@ int main(int argc, char** argv)
         if(!is_human_turn) {
             /* AI side or ai-only mode: just end the turn. */
             if(pending_choice) {
-                wl_choose(eng, 0);
+                WL_Command c{}; c.type = WL_CMD_CHOOSE; c.choose.option = 0;
+                wl_send(eng, &c);
                 pending_choice = false;
             } else {
-                wl_end_turn(eng);
+                WL_Command c{}; c.type = WL_CMD_END_TURN;
+                wl_send(eng, &c);
             }
             waiting = false;
         } else {

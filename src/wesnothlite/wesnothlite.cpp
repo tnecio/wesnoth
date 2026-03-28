@@ -367,98 +367,62 @@ const WL_Event* wl_step(WL_Engine* engine)
  * Player actions
  * ========================================================================= */
 
-static WL_Status send_cmd(WL_Engine* engine, WLCommand cmd)
+WL_Status wl_send(WL_Engine* engine, const WL_Command* cmd)
 {
-    if(!engine) return WL_ERR_INVALID;
+    if(!engine || !cmd) return WL_ERR_INVALID;
     WLEngineImpl& e = *engine->impl;
     if(!e.channel) return WL_ERR_NO_GAME;
+
+    /* WL_CMD_CHOOSE can arrive while the game thread is blocked inside
+     * request_choice() rather than wait_for_command(), so try the direct
+     * choice channel first before checking game_waiting. */
+    if(cmd->type == WL_CMD_CHOOSE) {
+        if(e.channel->deliver_choice(cmd->choose.option))
+            return WL_OK;
+        /* Not in a choice; fall through and send via command channel. */
+    }
 
     {
         std::lock_guard lock(e.channel->ev_mtx);
         if(!e.channel->game_waiting) return WL_ERR_NOT_TURN;
     }
 
-    return e.channel->send_command(std::move(cmd));
-}
-
-WL_Status wl_move(WL_Engine* engine, WL_Loc from, WL_Loc to)
-{
-    WLCommand cmd;
-    cmd.type = WLCmdType::MOVE;
-    cmd.loc1 = from;
-    cmd.loc2 = to;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_attack(WL_Engine* engine, WL_Loc attacker, WL_Loc defender,
-                     int weapon_index)
-{
-    WLCommand cmd;
-    cmd.type = WLCmdType::ATTACK;
-    cmd.loc1 = attacker;
-    cmd.loc2 = defender;
-    cmd.int1 = weapon_index;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_recruit(WL_Engine* engine, const char* unit_type_id, WL_Loc at)
-{
-    if(!unit_type_id) return WL_ERR_INVALID;
-    WLCommand cmd;
-    cmd.type = WLCmdType::RECRUIT;
-    cmd.str1 = unit_type_id;
-    cmd.loc1 = at;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_recall(WL_Engine* engine, const char* unit_id, WL_Loc at)
-{
-    if(!unit_id) return WL_ERR_INVALID;
-    WLCommand cmd;
-    cmd.type = WLCmdType::RECALL;
-    cmd.str1 = unit_id;
-    cmd.loc1 = at;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_dismiss(WL_Engine* engine, const char* unit_id)
-{
-    if(!unit_id) return WL_ERR_INVALID;
-    WLCommand cmd;
-    cmd.type = WLCmdType::DISMISS;
-    cmd.str1 = unit_id;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_end_turn(WL_Engine* engine)
-{
-    WLCommand cmd;
-    cmd.type = WLCmdType::END_TURN;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_choose(WL_Engine* engine, int option_index)
-{
-    if(!engine) return WL_ERR_INVALID;
-    WLEngineImpl& e = *engine->impl;
-    if(!e.channel) return WL_ERR_NO_GAME;
-
-    /* Try direct choice channel first (game thread blocked in request_choice). */
-    if(e.channel->deliver_choice(option_index))
-        return WL_OK;
-
-    /* Fall back to command channel for mid-action choices during play_human_turn. */
-    WLCommand cmd;
-    cmd.type = WLCmdType::CHOOSE;
-    cmd.int1 = option_index;
-    return send_cmd(engine, cmd);
-}
-
-WL_Status wl_undo(WL_Engine* engine)
-{
-    WLCommand cmd;
-    cmd.type = WLCmdType::UNDO;
-    return send_cmd(engine, cmd);
+    WLCommand internal;
+    internal.type = cmd->type;
+    switch(cmd->type) {
+    case WL_CMD_MOVE:
+        internal.loc1 = cmd->move.from;
+        internal.loc2 = cmd->move.to;
+        break;
+    case WL_CMD_ATTACK:
+        internal.loc1 = cmd->attack.att;
+        internal.loc2 = cmd->attack.def;
+        internal.int1 = cmd->attack.weapon;
+        break;
+    case WL_CMD_RECRUIT:
+        if(!cmd->recruit.type_id) return WL_ERR_INVALID;
+        internal.str1 = cmd->recruit.type_id;
+        internal.loc1 = cmd->recruit.at;
+        break;
+    case WL_CMD_RECALL:
+        if(!cmd->recall.unit_id) return WL_ERR_INVALID;
+        internal.str1 = cmd->recall.unit_id;
+        internal.loc1 = cmd->recall.at;
+        break;
+    case WL_CMD_DISMISS:
+        if(!cmd->dismiss.unit_id) return WL_ERR_INVALID;
+        internal.str1 = cmd->dismiss.unit_id;
+        break;
+    case WL_CMD_CHOOSE:
+        internal.int1 = cmd->choose.option;
+        break;
+    case WL_CMD_END_TURN:
+    case WL_CMD_UNDO:
+        break;
+    default:
+        return WL_ERR_INVALID;
+    }
+    return e.channel->send_command(std::move(internal));
 }
 
 /* =========================================================================

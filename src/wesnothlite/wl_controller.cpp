@@ -70,9 +70,9 @@ protected:
             WL_Status result = process_command(cmd);
             ch_->post_result(result);
 
-            if(result == WL_OK && cmd.type == WLCmdType::END_TURN)
+            if(result == WL_OK && cmd.type == WL_CMD_END_TURN)
                 break;
-            if(result == WL_OK && cmd.type == WLCmdType::UNDO)
+            if(result == WL_OK && cmd.type == WL_CMD_UNDO)
                 continue;   /* undo stays in loop */
         }
 
@@ -86,35 +86,35 @@ private:
     {
         try {
             switch(cmd.type) {
-            case WLCmdType::END_TURN:
+            case WL_CMD_END_TURN:
                 force_end_turn();
                 return WL_OK;
 
-            case WLCmdType::UNDO:
+            case WL_CMD_UNDO:
                 if(undo_stack().can_undo()) {
                     undo_stack().undo();
                     return WL_OK;
                 }
                 return WL_ERR_INVALID;
 
-            case WLCmdType::MOVE:
+            case WL_CMD_MOVE:
                 return do_move(cmd.loc1, cmd.loc2);
 
-            case WLCmdType::ATTACK:
+            case WL_CMD_ATTACK:
                 return do_attack(cmd.loc1, cmd.loc2, cmd.int1);
 
-            case WLCmdType::RECRUIT:
+            case WL_CMD_RECRUIT:
                 return do_recruit(cmd.str1,
                     map_location(cmd.loc1.x - 1, cmd.loc1.y - 1));
 
-            case WLCmdType::RECALL:
+            case WL_CMD_RECALL:
                 return do_recall(cmd.str1,
                     map_location(cmd.loc1.x - 1, cmd.loc1.y - 1));
 
-            case WLCmdType::DISMISS:
+            case WL_CMD_DISMISS:
                 return do_dismiss(cmd.str1);
 
-            case WLCmdType::CHOOSE:
+            case WL_CMD_CHOOSE:
                 /* Deliver the choice to a pending request_choice() call
                    that originated from inside do_move/do_attack/etc. */
                 if(ch_->deliver_choice(cmd.int1))
@@ -199,8 +199,9 @@ private:
         return WL_OK;
     }
 
-    WL_Status do_recruit(const std::string& type_id, map_location hex)
+    WL_Status do_recruit(const char* type_id, map_location hex)
     {
+        if(!type_id) return WL_ERR_INVALID;
         const unit_type* ut = unit_types.find(type_id);
         if(!ut) return WL_ERR_UNKNOWN;
         if(current_team().gold() < ut->cost()) return WL_ERR_NO_GOLD;
@@ -215,8 +216,9 @@ private:
         return WL_OK;
     }
 
-    WL_Status do_recall(const std::string& unit_id, map_location hex)
+    WL_Status do_recall(const char* unit_id, map_location hex)
     {
+        if(!unit_id) return WL_ERR_INVALID;
         const team& t = current_team();
         const recall_list_manager& rl = t.recall_list();
         unit_ptr u_ptr;
@@ -237,8 +239,9 @@ private:
         return WL_OK;
     }
 
-    WL_Status do_dismiss(const std::string& unit_id)
+    WL_Status do_dismiss(const char* unit_id)
     {
+        if(!unit_id) return WL_ERR_INVALID;
         const recall_list_manager& rl = current_team().recall_list();
         bool found = std::any_of(rl.begin(), rl.end(),
             [&](const unit_ptr& u){ return u->id() == unit_id; });

@@ -60,16 +60,16 @@ struct WLEventInternal {
 
 /* =========================================================================
  * Command: API thread → game thread
+ *
+ * Uses WL_CmdType from the public header as discriminator.
+ * str1 is a non-owning pointer: valid for the duration of send_command(),
+ * which blocks synchronously until the game thread posts its result.
  * ========================================================================= */
-enum class WLCmdType {
-    MOVE, ATTACK, RECRUIT, RECALL, DISMISS, END_TURN, CHOOSE, UNDO
-};
-
 struct WLCommand {
-    WLCmdType type;
-    WL_Loc    loc1{0, 0}, loc2{0, 0};
-    std::string str1;    /* unit_type_id or unit_id */
-    int       int1 = -1; /* weapon_index or option_index */
+    WL_CmdType  type  = WL_CMD_END_TURN;
+    WL_Loc      loc1{0, 0}, loc2{0, 0};
+    const char* str1 = nullptr;   /* unit_type_id or unit_id */
+    int         int1 = -1;        /* weapon_index or option_index */
 };
 
 /* =========================================================================
