@@ -1,9 +1,11 @@
 /**
  * wl_events.cpp  —  Event materialisation
  *
- * Converts a WLEventInternal (the internal ring-buffer representation) into a
- * heap-allocated WL_Event whose const char* fields point into the same block.
- * The resulting block is owned by the caller and freed with wl_free().
+ * Converts a WLEventInternal (the internal representation) into a WL_Event
+ * written into a caller-supplied std::vector<char> buffer (engine-owned).
+ * All const char* fields in the result point into the same contiguous block.
+ * The returned pointer is valid until the next call to wl_materialize_event()
+ * on the same buffer.  Do NOT pass it to wl_free().
  */
 
 #include "wl_impl.hpp"
