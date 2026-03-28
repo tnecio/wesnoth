@@ -36,6 +36,8 @@
 #include "units/types.hpp"
 #include "units/unit.hpp"
 
+#include <chrono>
+
 /* =========================================================================
  * WLController
  * playsingle_controller adapted for channel-based I/O.
@@ -268,10 +270,17 @@ void wl_run_game_thread(WLEngineImpl* e)
             ch.post_event(std::move(ev));
         }
 
-        e->config_manager->load_game_config_for_game(
-            state.classification(),
-            e->needs_scenario_init ? e->pending_scenario_id
-                                   : state.get_scenario_id());
+        {
+            auto _t0 = std::chrono::steady_clock::now();
+            e->config_manager->load_game_config_for_game(
+                state.classification(),
+                e->needs_scenario_init ? e->pending_scenario_id
+                                       : state.get_scenario_id());
+            auto _t1 = std::chrono::steady_clock::now();
+            LOG_WL << "[perf] load_game_config_for_game: "
+                   << std::chrono::duration_cast<std::chrono::milliseconds>(_t1 - _t0).count()
+                   << " ms";
+        }
 
         if(e->needs_scenario_init) {
             const std::string& sid = e->pending_scenario_id;

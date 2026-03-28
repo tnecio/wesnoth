@@ -11,6 +11,7 @@
 #include "wl_impl.hpp"
 
 #include "filesystem.hpp"
+#include <unordered_map>
 #include "map/map.hpp"
 #include "terrain/terrain.hpp"
 #include "terrain/translation.hpp"
@@ -37,16 +38,30 @@ std::string resolve_img(const std::string& rel)
     /* Strip any Wesnoth compositor suffix (~BLIT, ~RC, etc.) */
     std::string base = rel.substr(0, rel.find('~'));
     if(base.empty()) return rel;
+
+    /* Memoize: filesystem::get_binary_file_location() calls file_exists()
+     * which crosses the WASM→JS boundary — cache results to avoid repeating
+     * the VFS lookup for the same image path (hot path in wl_query_map). */
+    static std::unordered_map<std::string, std::string> s_cache;
+    auto it = s_cache.find(base);
+    if(it != s_cache.end()) return it->second;
+
+    std::string result;
     auto opt = filesystem::get_binary_file_location("images", base);
-    if(!opt) return "core/images/" + base;   /* fallback for core assets */
-    std::string full = *opt;
-    if(!g_data_root.empty()) {
-        const std::string prefix = g_data_root + "/";
-        if(full.size() > prefix.size() &&
-           full.substr(0, prefix.size()) == prefix)
-            return full.substr(prefix.size());
+    if(!opt) {
+        result = "core/images/" + base;
+    } else {
+        std::string full = *opt;
+        if(!g_data_root.empty()) {
+            const std::string prefix = g_data_root + "/";
+            if(full.size() > prefix.size() &&
+               full.substr(0, prefix.size()) == prefix)
+                full = full.substr(prefix.size());
+        }
+        result = std::move(full);
     }
-    return full;
+    s_cache.emplace(base, result);
+    return result;
 }
 
 /* =========================================================================

@@ -26,6 +26,7 @@
 #include "video.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -68,7 +69,14 @@ WL_Engine* wl_init(const char* data_path, const char* userdata_path)
 
         e.config_manager = std::make_unique<game_config_manager>(
             *e.cmdline_opts);
-        e.config_manager->init_game_config(game_config_manager::NO_FORCE_RELOAD);
+        {
+            auto _t0 = std::chrono::steady_clock::now();
+            e.config_manager->init_game_config(game_config_manager::NO_FORCE_RELOAD);
+            auto _t1 = std::chrono::steady_clock::now();
+            LOG_WL << "[perf] init_game_config: "
+                   << std::chrono::duration_cast<std::chrono::milliseconds>(_t1 - _t0).count()
+                   << " ms";
+        }
 
         e.initialized = true;
         return handle;
