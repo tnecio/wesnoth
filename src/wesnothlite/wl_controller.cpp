@@ -188,6 +188,47 @@ private:
             return WL_ERR_INVALID;
         if(weapon < 0) weapon = 0;
 
+        /* If the attacker is not adjacent to the defender, move to the nearest
+         * reachable adjacent hex first, then attack from there. */
+        if(!tiles_adjacent(att, def)) {
+            map_location best;
+            pathfind::shortest_path_calculator calc(
+                *a, current_team(), get_teams(), m);
+            for(const map_location& adj : get_adjacent_tiles(def)) {
+                if(!adj.valid(m.w(), m.h())) continue;
+                if(get_units().find(adj) != get_units().end()) continue;
+                pathfind::plain_route route = pathfind::a_star_search(
+                    att, adj, 10000.0, calc, m.w(), m.h());
+                if(!route.steps.empty()) { best = adj; break; }
+            }
+            if(!best.valid()) return WL_ERR_NO_PATH;
+
+            /* Save IDs before the move: move_unit_and_record fires Lua events
+             * that can modify the unit map and invalidate any iterator. */
+            const std::string att_id = a->id();
+            const std::string def_id = d->id();
+
+            WL_Status mv = do_move(watt, { best.wml_x(), best.wml_y() });
+            if(mv != WL_OK) return mv;
+
+            /* Re-find both units by ID after the move (unit_map::find only
+             * accepts a location, so we iterate). */
+            auto find_by_id = [&](const std::string& id) {
+                return std::find_if(get_units().begin(), get_units().end(),
+                    [&](const unit& u){ return u.id() == id; });
+            };
+            a = find_by_id(att_id);
+            if(a == get_units().end()) return WL_ERR_INVALID;
+            att = a->get_location();
+
+            d = find_by_id(def_id);
+            if(d == get_units().end()) return WL_ERR_INVALID;
+
+            /* If the move was interrupted (zone of control, etc.) and the
+             * attacker is no longer adjacent to the defender, abort. */
+            if(!tiles_adjacent(att, def)) return WL_ERR_NO_PATH;
+        }
+
         synced_context::run_and_throw("attack",
             replay_helper::get_attack(
                 att, def,
