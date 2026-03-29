@@ -668,12 +668,12 @@ WL_ReachList* wl_query_reach(WL_Engine* engine, WL_Loc wloc)
         items[i].loc        = { s.curr.wml_x(), s.curr.wml_y() };
         items[i].moves_left = s.move_left;
         items[i].defense    = u.defense_modifier(m.get_terrain(s.curr));
-        items[i].can_attack = 0;
+        items[i].can_attack_from = 0;
         for(const map_location& adj : get_adjacent_tiles(s.curr)) {
             auto aj = resources::gameboard->units().find(adj);
             if(aj != resources::gameboard->units().end()
                && viewing_team.is_enemy(aj->side())) {
-                items[i].can_attack = 1;
+                items[i].can_attack_from = 1;
                 break;
             }
         }

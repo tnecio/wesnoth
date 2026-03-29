@@ -556,7 +556,7 @@ typedef struct {
     WL_Loc loc;
     int    moves_left;
     int    defense;      /**< Unit-specific defense % on this terrain. */
-    int    can_attack;
+    int    can_attack_from; /**< 1 if unit can attack an enemy from this hex, 0 otherwise. */
 } WL_ReachHex;
 
 typedef struct {

@@ -274,8 +274,8 @@ static void cmd_reach(WL_Engine* eng, WL_Loc loc)
     printf("  %d reachable hexes from (%d,%d):\n", rl->count, loc.x, loc.y);
     for(int i = 0; i < rl->count; ++i) {
         const WL_ReachHex& h = rl->hexes[i];
-        printf("    (%d,%d) moves_left=%d def=%d%% can_attack=%d\n",
-               h.loc.x, h.loc.y, h.moves_left, h.defense, h.can_attack);
+        printf("    (%d,%d) moves_left=%d def=%d%% can_attack_from=%d\n",
+               h.loc.x, h.loc.y, h.moves_left, h.defense, h.can_attack_from);
     }
     wl_free(rl);
 }
