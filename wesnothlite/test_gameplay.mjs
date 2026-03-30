@@ -13,8 +13,7 @@
  *   node wesnothlite/test_gameplay.mjs
  */
 
-import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 import fs from 'fs';
 
@@ -28,8 +27,7 @@ if (!fs.existsSync(path.join(wasmDir, 'wesnothlite.js'))) {
     process.exit(1);
 }
 
-const require = createRequire(import.meta.url);
-const WesnothLite = require(path.join(wasmDir, 'wesnothlite.js'));
+const { default: WesnothLite } = await import(pathToFileURL(path.join(wasmDir, 'wesnothlite.js')).href);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -219,16 +217,16 @@ function decodeEvent(m, evtPtr) {
     const type = m.getValue(evtPtr, 'i32');
     const u    = evtPtr + 4; // start of union
     const WL_EVENT = {
-        SCENARIO_START:      0,
-        SCENARIO_END:        1,
-        TURN_START:          2,
-        SIDE_TURN_START:     3,
-        SIDE_TURN_END:       4,
-        WAITING_FOR_INPUT:   5,
-        UNIT_MOVE:           6,
-        UNIT_ATTACK:         7,
-        UNIT_RECRUIT:        8,
-        UNIT_RECALL:         9,
+        LOADING_CONFIG:      0,
+        SCENARIO_START:      1,
+        SCENARIO_END:        2,
+        TURN_START:          3,
+        SIDE_TURN_START:     4,
+        SIDE_TURN_END:       5,
+        WAITING_FOR_INPUT:   6,
+        UNIT_MOVE:           7,
+        UNIT_ATTACK:         8,
+        UNIT_SPAWN:          9,
         UNIT_DISMISS:        10,
         UNIT_DIE:            11,
         UNIT_ADVANCE:        12,
@@ -260,8 +258,8 @@ function decodeEvent(m, evtPtr) {
                      next_scenario: readStr(m, m.getValue(u + 4, 'i32')) };
         case WL_EVENT.UNIT_MOVE:
             return { type: 'UNIT_MOVE', id: readStr(m, m.getValue(u, 'i32')) };
-        case WL_EVENT.UNIT_RECRUIT:
-            return { type: 'UNIT_RECRUIT', type_id: readStr(m, m.getValue(u, 'i32')), side: m.getValue(u + 8, 'i32') };
+        case WL_EVENT.UNIT_SPAWN:
+            return { type: 'UNIT_SPAWN', type_id: readStr(m, m.getValue(u, 'i32')), side: m.getValue(u + 8, 'i32') };
         case WL_EVENT.UNIT_ATTACK:
             return { type: 'UNIT_ATTACK', attacker: readStr(m, m.getValue(u, 'i32')), defender: readStr(m, m.getValue(u + 4, 'i32')) };
         case WL_EVENT.UNIT_DIE:
@@ -307,6 +305,68 @@ function pumpToInput(m, wl_step, engine, maxSteps = 5000, opts = {}) {
     return { events, waiting };
 }
 
+// ─── Command helpers (wl_send API) ───────────────────────────────────────────
+
+/**
+ * WL_Command layout (24 bytes):
+ *   offset 0 : int   type (WL_CmdType)
+ *   offset 4 : union (largest variant: attack = att.x + att.y + def.x + def.y + weapon = 5×4 = 20 bytes)
+ *     move:    from.x(4) from.y(8) to.x(12) to.y(16)
+ *     attack:  att.x(4)  att.y(8)  def.x(12) def.y(16) weapon(20)
+ *     recruit: type_id ptr(4) at.x(8) at.y(12)
+ *     end_turn / undo / choose: minimal payload
+ */
+const WL_CMD = { MOVE: 0, ATTACK: 1, RECRUIT: 2, RECALL: 3, DISMISS: 4, END_TURN: 5, CHOOSE: 6, UNDO: 7 };
+const WL_COMMAND_SIZE = 24;
+
+function sendMove(m, wl_send, engine, fromX, fromY, toX, toY) {
+    const p = m._malloc(WL_COMMAND_SIZE);
+    m.setValue(p,      WL_CMD.MOVE, 'i32');
+    m.setValue(p +  4, fromX, 'i32');
+    m.setValue(p +  8, fromY, 'i32');
+    m.setValue(p + 12, toX,   'i32');
+    m.setValue(p + 16, toY,   'i32');
+    const rc = wl_send(engine, p);
+    m._free(p);
+    return rc;
+}
+
+function sendAttack(m, wl_send, engine, attX, attY, defX, defY, weapon) {
+    const p = m._malloc(WL_COMMAND_SIZE);
+    m.setValue(p,      WL_CMD.ATTACK, 'i32');
+    m.setValue(p +  4, attX,   'i32');
+    m.setValue(p +  8, attY,   'i32');
+    m.setValue(p + 12, defX,   'i32');
+    m.setValue(p + 16, defY,   'i32');
+    m.setValue(p + 20, weapon, 'i32');
+    const rc = wl_send(engine, p);
+    m._free(p);
+    return rc;
+}
+
+function sendRecruit(m, wl_send, engine, typeId, atX, atY) {
+    const p      = m._malloc(WL_COMMAND_SIZE);
+    const maxLen = typeId.length * 4 + 1;  // safe upper bound for UTF-8
+    const strPtr = m._malloc(maxLen);
+    m.stringToUTF8(typeId, strPtr, maxLen);
+    m.setValue(p,      WL_CMD.RECRUIT, 'i32');
+    m.setValue(p +  4, strPtr, 'i32');
+    m.setValue(p +  8, atX,   'i32');
+    m.setValue(p + 12, atY,   'i32');
+    const rc = wl_send(engine, p);
+    m._free(strPtr);
+    m._free(p);
+    return rc;
+}
+
+function sendEndTurn(m, wl_send, engine) {
+    const p = m._malloc(WL_COMMAND_SIZE);
+    m.setValue(p, WL_CMD.END_TURN, 'i32');
+    const rc = wl_send(engine, p);
+    m._free(p);
+    return rc;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const m = await WesnothLite({
@@ -326,7 +386,7 @@ m.FS.mkdir('/userdata');
 // Wrap API functions
 const wl_init           = m.cwrap('wl_init',              'number', ['string', 'string']);
 const wl_step           = m.cwrap('wl_step',              'number', ['number']);
-const wl_end_turn       = m.cwrap('wl_end_turn',          'number', ['number']);
+const wl_send           = m.cwrap('wl_send',              'number', ['number', 'number']);
 const wl_list_campaigns = m.cwrap('wl_list_campaigns',    'number', ['number']);
 const wl_start_campaign  = m.cwrap('wl_start_campaign',    'number', ['number', 'string', 'string']);
 const wl_start_scenario  = m.cwrap('wl_start_scenario',    'number', ['number', 'string', 'string', 'string']);
@@ -335,9 +395,6 @@ const wl_query_reach    = m.cwrap('wl_query_reach',       'number', ['number', '
 const wl_query_team     = m.cwrap('wl_query_team',        'number', ['number', 'number']);
 const wl_query_recruit  = m.cwrap('wl_query_recruit_list','number', ['number', 'number']);
 const wl_query_attack_options = m.cwrap('wl_query_attack_options', 'number', ['number', 'number', 'number']);
-const wl_move           = m.cwrap('wl_move',              'number', ['number', 'number', 'number']);
-const wl_recruit        = m.cwrap('wl_recruit',           'number', ['number', 'string', 'number']);
-const wl_attack         = m.cwrap('wl_attack',            'number', ['number', 'number', 'number', 'number']);
 const wl_free           = m.cwrap('wl_free',              null,     ['number']);
 const wl_last_error     = m.cwrap('wl_last_error',        'string', ['number']);
 
@@ -463,11 +520,7 @@ if (movable.length > 0) {
 
         if (dest) {
             console.log(`  Moving ${unit.name} from (${unit.x},${unit.y}) to (${dest.x},${dest.y})`);
-            const fromPtr = allocLoc(m, unit.x, unit.y);
-            const toPtr   = allocLoc(m, dest.x, dest.y);
-            const rc      = wl_move(engine, fromPtr, toPtr);
-            m._free(fromPtr);
-            m._free(toPtr);
+            const rc = sendMove(m, wl_send, engine, unit.x, unit.y, dest.x, dest.y);
 
             check('wl_move returns WL_OK', rc === 0, `got ${rc}: ${wl_last_error(engine)}`);
             if (rc === 0) {
@@ -507,16 +560,14 @@ if (recruiter && team1 && team1.gold >= 10) {
 
         if (types.length > 0) {
             // Recruit at the leader's hex (engine will find the adjacent castle hex)
-            const atPtr = allocLoc(m, recruiter.x, recruiter.y);
-            const rc    = wl_recruit(engine, types[0], atPtr);
-            m._free(atPtr);
+            const rc = sendRecruit(m, wl_send, engine, types[0], recruiter.x, recruiter.y);
 
             check('wl_recruit returns WL_OK', rc === 0, `got ${rc}: ${wl_last_error(engine)}`);
             if (rc === 0) {
                 recruitSuccess = true;
                 const { events: recEvents } = pumpToInput(m, wl_step, engine);
-                const sawRecruit = recEvents.some(e => e.type === 'UNIT_RECRUIT');
-                check('UNIT_RECRUIT event emitted', sawRecruit);
+                const sawRecruit = recEvents.some(e => e.type === 'UNIT_SPAWN');
+                check('UNIT_SPAWN event emitted', sawRecruit);
                 console.log(`  Post-recruit events: ${recEvents.map(e => e.type).join(', ')}`);
             }
         }
@@ -562,11 +613,7 @@ for (const s1u of side1fresh) {
 
 if (attacker && defender) {
     console.log(`  Attacking: ${attacker.name} at (${attacker.x},${attacker.y}) → ${defender.type_id} at (${defender.x},${defender.y})`);
-    const aPtr = allocLoc(m, attacker.x, attacker.y);
-    const dPtr = allocLoc(m, defender.x, defender.y);
-    const rc   = wl_attack(engine, aPtr, dPtr, 0);
-    m._free(aPtr);
-    m._free(dPtr);
+    const rc = sendAttack(m, wl_send, engine, attacker.x, attacker.y, defender.x, defender.y, 0);
 
     check('wl_attack returns WL_OK', rc === 0, `got ${rc}: ${wl_last_error(engine)}`);
     if (rc === 0) {
@@ -586,7 +633,7 @@ if (attacker && defender) {
 
 console.log('\n=== Phase 9: End turn + AI turn ===');
 
-const etRc = wl_end_turn(engine);
+const etRc = sendEndTurn(m, wl_send, engine);
 check('wl_end_turn returns WL_OK', etRc === 0, `got ${etRc}: ${wl_last_error(engine)}`);
 
 if (etRc === 0) {
@@ -644,10 +691,7 @@ if (etRc === 0) {
 
     if (atk2 && def2) {
         console.log(`  Attacking: ${atk2.name} at (${atk2.x},${atk2.y}) → ${def2.type_id} at (${def2.x},${def2.y})`);
-        const aPtr = allocLoc(m, atk2.x, atk2.y);
-        const dPtr = allocLoc(m, def2.x, def2.y);
-        const rc   = wl_attack(engine, aPtr, dPtr, 0);
-        m._free(aPtr); m._free(dPtr);
+        const rc = sendAttack(m, wl_send, engine, atk2.x, atk2.y, def2.x, def2.y, 0);
 
         check('wl_attack (turn 2) returns WL_OK', rc === 0, `got ${rc}: ${wl_last_error(engine)}`);
         if (rc === 0) {

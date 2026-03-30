@@ -1,0 +1,20 @@
+name: Basic functionality test
+campaign: WL_Test
+command_line_options: --rng-seed=42
+sequence:
+- output: |
+    [EVENT] scenario_start
+    [EVENT] waiting_for_input side=1 turn=1
+- input: units
+  output_match: |
+    wl_test_leader type_id=Horseman side=1 at=2,1 hp=38/38 xp=0/54 moves=8/8
+    wl_test_fighter type_id=Spearman side=1 at=5,4
+    wl_test_enemy type_id=Goblin Spearman side=2 at=6,4
+- input: recruit Spearman 3,1
+  output: |
+    recruit -> OK
+    [EVENT] unit_spawn type=Spearman id=Spearman-4 side=1 at=3,1
+- input: attack 5,4 6,4 0
+  output: |
+    attack -> OK
+- input: quit

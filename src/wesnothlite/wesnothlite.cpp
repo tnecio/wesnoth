@@ -11,6 +11,8 @@
 
 #include "wl_impl.hpp"
 
+#include <sstream>
+
 #include "commandline_options.hpp"
 #include "events.hpp"
 #include "filesystem.hpp"
@@ -25,18 +27,22 @@
 #include "serialization/compression.hpp"
 #include "video.hpp"
 
+#include "random.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <memory>
+#include <random>
 #include <stdexcept>
 
 /* =========================================================================
  * Lifecycle
  * ========================================================================= */
 
-WL_Engine* wl_init(const char* data_path, const char* userdata_path)
+WL_Engine* wl_init(const char* data_path, const char* userdata_path, const char* options)
 {
     if(!data_path) return nullptr;
 
@@ -64,8 +70,13 @@ WL_Engine* wl_init(const char* data_path, const char* userdata_path)
 
         video::init(video::fake::no_window);
 
-        e.cmdline_opts = std::make_unique<commandline_options>(
-            std::vector<std::string>{"wesnothlite"});
+        std::vector<std::string> argv{"wesnothlite"};
+        if(options && *options) {
+            std::istringstream iss(options);
+            std::string tok;
+            while(iss >> tok) argv.push_back(std::move(tok));
+        }
+        e.cmdline_opts = std::make_unique<commandline_options>(std::move(argv));
 
         e.config_manager = std::make_unique<game_config_manager>(
             *e.cmdline_opts);
@@ -433,3 +444,7 @@ void wl_free(void* snapshot)
 {
     std::free(snapshot);
 }
+
+/* =========================================================================
+ * Test helpers
+ * ========================================================================= */

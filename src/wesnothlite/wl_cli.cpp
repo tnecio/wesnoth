@@ -98,7 +98,7 @@ static void print_event(const WL_Event* ev)
         break;
 
     case WL_EVENT_UNIT_MOVE:
-        printf("[EVENT] unit_move unit=%s side=%d from=(%d,%d) to=(%d,%d) path_len=%d\n",
+        printf("[EVENT] unit_move unit=%s side=%d from=%d,%d to=%d,%d path_len=%d\n",
                ev->unit_move.unit_id, ev->unit_move.side,
                ev->unit_move.from.x, ev->unit_move.from.y,
                ev->unit_move.to.x,   ev->unit_move.to.y,
@@ -120,7 +120,7 @@ static void print_event(const WL_Event* ev)
     }
 
     case WL_EVENT_UNIT_SPAWN:
-        printf("[EVENT] unit_spawn type=%s id=%s side=%d at=(%d,%d)\n",
+        printf("[EVENT] unit_spawn type=%s id=%s side=%d at=%d,%d\n",
                ev->unit_spawn.unit_type_id, ev->unit_spawn.unit_id,
                ev->unit_spawn.side,
                ev->unit_spawn.at.x, ev->unit_spawn.at.y);
@@ -133,7 +133,7 @@ static void print_event(const WL_Event* ev)
         break;
 
     case WL_EVENT_UNIT_DIE:
-        printf("[EVENT] unit_die id=%s type=%s side=%d at=(%d,%d) killer=%s\n",
+        printf("[EVENT] unit_die id=%s type=%s side=%d at=%d,%d killer=%s\n",
                ev->unit_die.unit_id, ev->unit_die.unit_type_id,
                ev->unit_die.side,
                ev->unit_die.loc.x, ev->unit_die.loc.y,
@@ -141,11 +141,11 @@ static void print_event(const WL_Event* ev)
         break;
 
     case WL_EVENT_UNIT_ADVANCE:
-        printf("[EVENT] unit_advance id=%s side=%d at=(%d,%d) %s -> %s\n",
+        printf("[EVENT] unit_advance id=%s side=%d at=%d,%d from=%s to=%s\n",
                ev->unit_advance.unit_id, ev->unit_advance.side,
                ev->unit_advance.loc.x, ev->unit_advance.loc.y,
                ev->unit_advance.from_type_id,
-               ev->unit_advance.to_type_id ? ev->unit_advance.to_type_id : "(mod)");
+               ev->unit_advance.to_type_id ? ev->unit_advance.to_type_id : "modification_based");
         break;
 
     case WL_EVENT_UNIT_XP:
@@ -166,7 +166,7 @@ static void print_event(const WL_Event* ev)
         break;
 
     case WL_EVENT_VILLAGE_CAPTURE:
-        printf("[EVENT] village_capture at=(%d,%d) %d->%d\n",
+        printf("[EVENT] village_capture at=%d,%d %d->%d\n",
                ev->village_capture.loc.x, ev->village_capture.loc.y,
                ev->village_capture.old_side, ev->village_capture.new_side);
         break;
@@ -232,7 +232,7 @@ static const char* status_str(WL_Status s)
 static void cmd_info(WL_Engine* eng)
 {
     WL_GameInfo* g = wl_query_game(eng);
-    if(!g) { printf("(no game)\n"); return; }
+    if(!g) { printf("no game\n"); return; }
     printf("scenario: %s (%s)  turn: %d/%d  side: %d/%d  outcome: %s\n",
            g->scenario_name, g->scenario_id,
            g->turn, g->max_turns,
@@ -245,10 +245,10 @@ static void cmd_info(WL_Engine* eng)
 static void cmd_units(WL_Engine* eng)
 {
     WL_UnitList* ul = wl_query_units(eng);
-    if(!ul) { printf("(no units)\n"); return; }
+    if(!ul) { printf("no units\n"); return; }
     for(int i = 0; i < ul->count; ++i) {
         const WL_Unit& u = ul->units[i];
-        printf("  [%d] %s (%s) side=%d at=(%d,%d) hp=%d/%d xp=%d/%d moves=%d/%d\n",
+        printf("  [%d] %s type_id=%s side=%d at=%d,%d hp=%d/%d xp=%d/%d moves=%d/%d\n",
                i, u.id, u.type_id, u.side,
                u.loc.x, u.loc.y,
                u.hp, u.max_hp,
@@ -261,7 +261,7 @@ static void cmd_units(WL_Engine* eng)
 static void cmd_team(WL_Engine* eng, int side)
 {
     WL_Team* t = wl_query_team(eng, side);
-    if(!t) { printf("(no team)\n"); return; }
+    if(!t) { printf("no team\n"); return; }
     printf("  side=%d name=%s gold=%d income=%d villages=%d\n",
            t->side, t->name, t->gold, t->income, t->n_villages);
     wl_free(t);
@@ -270,7 +270,7 @@ static void cmd_team(WL_Engine* eng, int side)
 static void cmd_reach(WL_Engine* eng, WL_Loc loc)
 {
     WL_ReachList* rl = wl_query_reach(eng, loc);
-    if(!rl) { printf("(no reach)\n"); return; }
+    if(!rl) { printf("no reach\n"); return; }
     printf("  %d reachable hexes from (%d,%d):\n", rl->count, loc.x, loc.y);
     for(int i = 0; i < rl->count; ++i) {
         const WL_ReachHex& h = rl->hexes[i];
@@ -283,7 +283,7 @@ static void cmd_reach(WL_Engine* eng, WL_Loc loc)
 static void cmd_attacks(WL_Engine* eng, WL_Loc att, WL_Loc def)
 {
     WL_AttackOptionList* al = wl_query_attack_options(eng, att, def);
-    if(!al) { printf("(no attack options)\n"); return; }
+    if(!al) { printf("no attack options\n"); return; }
     printf("  %d attack options (default=%d):\n", al->count, al->default_option);
     for(int i = 0; i < al->count; ++i) {
         const WL_AttackOption& o = al->options[i];
@@ -488,7 +488,18 @@ int main(int argc, char** argv)
     std::string save_file;
     int human_side = 1;  /* 0 = fully ai-only */
 
+    std::string engine_options;
+
     for(int i = 1; i < argc; ++i) {
+        if(std::string(argv[i]) == "--") {
+            /* Everything after "--" is forwarded verbatim to wl_init. */
+            for(int j = i + 1; j < argc; ++j) {
+                if(!engine_options.empty()) engine_options += ' ';
+                engine_options += argv[j];
+            }
+            break;
+        }
+
         std::string arg = argv[i];
         auto eq = arg.find('=');
         std::string key = (eq != std::string::npos) ? arg.substr(0, eq) : arg;
@@ -514,7 +525,8 @@ int main(int argc, char** argv)
     }
 
     /* ── Init ── */
-    WL_Engine* eng = wl_init(data_path.c_str(), userdata.c_str());
+    WL_Engine* eng = wl_init(data_path.c_str(), userdata.c_str(),
+                             engine_options.empty() ? nullptr : engine_options.c_str());
     if(!eng) {
         fprintf(stderr, "[FATAL] wl_init failed\n");
         return 1;
@@ -598,11 +610,10 @@ int main(int argc, char** argv)
             }
             waiting = false;
         } else {
-            /* Interactive: prompt for a command. */
-            printf("> "); fflush(stdout);
             std::string line;
             if(!std::getline(std::cin, line)) break;  /* EOF */
             dispatch_command(eng, line, quit, &pending_choice);
+            if (quit) return 0;
             /* Stay in waiting state until user issues an action that
              * unblocks the game thread (move/attack/end_turn/etc.).
              * wl_step() will return events again after an action succeeds.

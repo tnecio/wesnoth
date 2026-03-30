@@ -20,6 +20,7 @@
 #define WESNOTHLITE_H
 
 #include <stddef.h>   /* size_t */
+#include <stdint.h>   /* uint32_t */
 
 /**
  * WL_API — marks functions that must be exported from the WASM module.
@@ -656,7 +657,14 @@ typedef struct {
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
-WL_API WL_Engine*  wl_init(const char* data_path, const char* userdata_path);
+/**
+ * @param options  Space-separated Wesnoth command-line flags, e.g.
+ *                 "--rng-seed=42 --debug".  Pass NULL or "" for defaults.
+ *                 Flags are forwarded verbatim to commandline_options; any
+ *                 option accepted by the Wesnoth binary is valid here.
+ */
+WL_API WL_Engine*  wl_init(const char* data_path, const char* userdata_path,
+                            const char* options);
 WL_API void        wl_shutdown(WL_Engine* engine);
 WL_API const char* wl_last_error(WL_Engine* engine);
 
