@@ -121,6 +121,13 @@ private:
                     return WL_OK;
                 return WL_ERR_INVALID;
             }
+        } catch(const return_to_play_side_exception&) {
+            /* The action succeeded and triggered a turn/game end.
+             * play_human_turn's loop will exit on the next
+             * should_return_to_play_side() check. */
+            return WL_OK;
+        } catch(const quit_game_exception&) {
+            return WL_OK;
         } catch(const std::exception& e) {
             ERR_WL << "command error: " << e.what();
             return WL_ERR_GENERIC;
