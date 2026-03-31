@@ -21,16 +21,16 @@ YAML format:
 import os
 import sys
 import subprocess
-import fnmatch
 import re
 from pathlib import Path
 
 import yaml
+import atexit
 
 # --- Configuration & Paths ---
 SCRIPT_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = SCRIPT_DIR.parents[1]
-WL_CLI = REPO_ROOT / "wesnoth" / "build" / "wl-cli"
+WL_CLI = REPO_ROOT / "wesnoth" / "build-debug" / "wl-cli"
 WL_DATA = REPO_ROOT / "wesnoth" / "data"
 WL_TIMEOUT = int(os.environ.get("WL_TIMEOUT", 180))
 
@@ -41,6 +41,7 @@ def matches(pattern: str, text: str, use_regex: bool = False) -> bool:
         matcher = re.compile(pattern)
         return bool(matcher.findall(text))
     return pattern in text
+
 
 def fail(msg: str, actual_lines: list[str], **extras) -> None:
     print(f"\n\n!!! FAIL: {msg} !!!")
@@ -57,26 +58,56 @@ def parse_pattern_lines(text: str) -> list[str]:
     return [l.rstrip() for l in text.splitlines() if l.strip()]
 
 
-def check(step_idx: int, patterns: list[str],
-                 actual: list[str], a_idx: int, use_regex: bool = False) -> int:
+def check(
+    step_idx: int,
+    patterns: list[str],
+    actual: list[str],
+    a_idx: int,
+    use_regex: bool = False,
+) -> int:
     """
     Strict match: consume exactly len(patterns) lines from actual starting at a_idx.
     Returns updated a_idx on success.
     """
     for i, pat in enumerate(patterns):
         if a_idx >= len(actual):
-            fail(f"Step {step_idx}: actual output ended before all 'output' patterns matched",
-                 actual, missing_pattern=pat)
+            fail(
+                f"Step {step_idx}: actual output ended before all 'output' patterns matched",
+                actual,
+                missing_pattern=pat,
+            )
         line = actual[a_idx]
         print(f"  [strict] expected='{pat}' actual='{line}' ", end="")
         if matches(pat, line, use_regex=use_regex):
             print("OK")
         else:
             print("MISMATCH")
-            fail(f"Step {step_idx}: strict mismatch at pattern #{i+1}",
-                 actual, expected=pat, actual_line=line)
+            fail(
+                f"Step {step_idx}: strict mismatch at pattern #{i+1}",
+                actual,
+                expected=pat,
+                actual_line=line,
+            )
         a_idx += 1
     return a_idx
+
+
+def prepare_campaign(campaign: str) -> None:
+    """Symlink the test campaign from the repo into WL_DATA, and register cleanup."""
+    symlink_path = WL_DATA / "campaigns" / campaign
+    test_campaign_dir = REPO_ROOT / "wesnoth" / "wesnothlite" / "tests" / campaign
+    print(test_campaign_dir)
+
+    if symlink_path.exists() or symlink_path.is_symlink():
+        symlink_path.unlink()
+    symlink_path.symlink_to(test_campaign_dir, target_is_directory=True)
+
+    def cleanup_symlink():
+        if symlink_path.exists() or symlink_path.is_symlink():
+            symlink_path.unlink()
+
+    atexit.register(cleanup_symlink)
+
 
 def run_test(yaml_path: Path) -> None:
     with open(yaml_path) as f:
@@ -97,6 +128,9 @@ def run_test(yaml_path: Path) -> None:
     cmd = [str(WL_CLI), f"--data={WL_DATA}", f"--campaign={campaign}"]
     if options:
         cmd += ["--"] + options.split()
+
+    # Prepare the environment
+    prepare_campaign(campaign)
 
     # Build stdin from all input steps
     stdin_lines = [step["input"] for step in sequence if "input" in step]
@@ -131,12 +165,18 @@ def run_test(yaml_path: Path) -> None:
     for step_idx, step in enumerate(sequence):
         if "output" in step or "output_match" in step:
             mode = "regex" if "output_match" in step else "strict"
-            patterns = parse_pattern_lines(step["output_match" if mode == "regex" else "output"])
+            patterns = parse_pattern_lines(
+                step["output_match" if mode == "regex" else "output"]
+            )
             if patterns:
                 print(f"Step {step_idx}: strict match ({len(patterns)} lines)")
-                a_idx = check(step_idx, patterns, actual, a_idx, use_regex=(mode == "regex"))
+                a_idx = check(
+                    step_idx, patterns, actual, a_idx, use_regex=(mode == "regex")
+                )
 
-    print(f"\nPASS: all patterns verified ({a_idx} of {len(actual)} actual lines consumed).")
+    print(
+        f"\nPASS: all patterns verified ({a_idx} of {len(actual)} actual lines consumed)."
+    )
 
 
 def main() -> None:

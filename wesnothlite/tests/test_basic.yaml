@@ -1,5 +1,5 @@
 name: Basic functionality test
-campaign: WL_Test
+campaign: BasicCampaign
 command_line_options: --rng-seed=42
 sequence:
 - output: |

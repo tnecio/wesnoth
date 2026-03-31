@@ -345,7 +345,7 @@ void wl_run_game_thread(WLEngineImpl* e)
                 WLEventInternal ev;
                 ev.type    = WL_EVENT_SCENARIO_END;
                 ev.outcome = WL_OUTCOME_QUIT;
-                ch.post_event(std::move(ev));
+                ch.post_event(std::move(ev));  // TODO: refactor error handling to surface errors like this in wl-cli
                 tl_channel = nullptr;
                 ch.set_done();
                 return;
