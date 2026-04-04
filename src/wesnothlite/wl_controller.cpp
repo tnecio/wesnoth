@@ -12,6 +12,7 @@
 #include "wl_impl.hpp"
 
 #include "actions/attack.hpp"
+#include "filesystem.hpp"
 #include "actions/create.hpp"
 #include "actions/move.hpp"
 #include "actions/undo.hpp"
@@ -67,6 +68,10 @@ protected:
 
         while(!should_return_to_play_side()) {
             WLCommand cmd = ch_->wait_for_command();
+            if(cmd.type == WL_CMD_QUIT) {
+                ch_->post_result(WL_OK);
+                throw quit_game_exception();
+            }
             WL_Status result = process_command(cmd);
             ch_->post_result(result);
 
@@ -120,6 +125,18 @@ private:
                 if(ch_->deliver_choice(cmd.int1))
                     return WL_OK;
                 return WL_ERR_INVALID;
+
+            case WL_CMD_SAVE: {
+                /* Mirror play_controller::save_game_auto: capture a live snapshot
+                 * of the current board state into saved_game before serialising. */
+                get_saved_game().set_snapshot(to_config());
+                const std::string saves_dir = filesystem::get_saves_dir();
+                filesystem::create_directory_if_missing(saves_dir);
+                savegame::ingame_savegame sg(get_saved_game(), compression::format::gzip);
+                sg.save_game_automatic(false, ".wl_tmp_save");
+                get_saved_game().remove_snapshot();
+                return WL_OK;
+            }
             }
         } catch(const return_to_play_side_exception&) {
             /* The action succeeded and triggered a turn/game end.

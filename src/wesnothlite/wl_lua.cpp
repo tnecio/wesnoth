@@ -15,6 +15,7 @@
 #include "resources.hpp"
 #include "scripting/game_lua_kernel.hpp"
 #include "serialization/string_utils.hpp"
+#include "filesystem.hpp"
 
 /* =========================================================================
  * Thread-local state (defined here; declared extern in wl_impl.hpp)
@@ -237,7 +238,12 @@ void wl_hook_story_part(const std::string& title,
     ev.type = WL_EVENT_STORY;
     ev.s1   = title;
     ev.s2   = text;
-    ev.s3   = background;
+    // Resolve the WML image path to an absolute filesystem path so the
+    // browser can load it directly (e.g. "story/foo.webp" → "/game/data/…").
+    if(!background.empty()) {
+        auto resolved = filesystem::get_binary_file_location("images", background);
+        ev.s3 = resolved ? *resolved : background;
+    }
     tl_channel->post_event(std::move(ev));
 }
 

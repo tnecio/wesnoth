@@ -228,6 +228,8 @@ typedef enum {
     WL_CMD_END_TURN = 5,
     WL_CMD_CHOOSE   = 6,
     WL_CMD_UNDO     = 7,
+    WL_CMD_SAVE     = 8,  /**< Internal: save current game to temp file (used by wl_save_to_buffer). */
+    WL_CMD_QUIT     = 9,  /**< Internal: abort the current game session (used by launch_game_thread). */
 } WL_CmdType;
 
 typedef struct WL_Command {

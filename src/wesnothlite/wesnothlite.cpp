@@ -188,7 +188,17 @@ static WL_Status setup_scenario(WLEngineImpl& e,
 static void launch_game_thread(WLEngineImpl& e)
 {
     if(e.game_thread.joinable()) {
-        if(e.channel) e.channel->set_done();
+        if(e.channel) {
+            /* If the game thread is waiting for a human-turn command, unblock
+             * it cleanly via WL_CMD_QUIT (which throws quit_game_exception).
+             * set_done() is then used as a belt-and-suspenders signal. */
+            if(e.channel->game_waiting) {
+                WLCommand qcmd;
+                qcmd.type = WL_CMD_QUIT;
+                e.channel->send_command(qcmd);  // blocks until game thread posts its result
+            }
+            e.channel->set_done();
+        }
         e.game_thread.join();
     }
 
@@ -313,16 +323,26 @@ unsigned char* wl_save_to_buffer(WL_Engine* engine, size_t* out_size)
     }
 
     try {
-        std::string tmp = filesystem::get_saves_dir() + "/.wl_tmp_save.gz";
-        {
-            savegame::ingame_savegame sg(*engine->impl->state,
-                                         compression::format::gzip);
-            sg.save_game_automatic(false, tmp);
+        /* Route the save through the game thread (via WL_CMD_SAVE) so that
+         * WLController::gamestate() provides the live in-game state.  Calling
+         * ingame_savegame directly from the API thread would use the initial
+         * saved_game before any snapshot update, producing an empty or corrupt
+         * save.  The game thread writes the file; we read it back here. */
+        const std::string saves_dir = filesystem::get_saves_dir();
+        const std::string tmp_path  = saves_dir + "/.wl_tmp_save.gz";
+
+        WLCommand cmd;
+        cmd.type = WL_CMD_SAVE;
+        WL_Status status = engine->impl->channel->send_command(cmd);
+        if(status != WL_OK) {
+            engine->impl->last_error = "wl_save_to_buffer: save command failed";
+            return nullptr;
         }
 
-        std::ifstream f(tmp, std::ios::binary | std::ios::ate);
+        std::ifstream f(tmp_path, std::ios::binary | std::ios::ate);
         if(!f.is_open()) {
-            engine->impl->last_error = "wl_save_to_buffer: could not read temp file";
+            engine->impl->last_error = "wl_save_to_buffer: could not read temp file: "
+                                       + tmp_path;
             return nullptr;
         }
         std::streamsize sz = f.tellg();
@@ -338,7 +358,7 @@ unsigned char* wl_save_to_buffer(WL_Engine* engine, size_t* out_size)
         *out_size = static_cast<std::size_t>(sz);
 
         f.close();
-        filesystem::delete_file(tmp);
+        filesystem::delete_file(tmp_path);
         return result;
     } catch(const std::exception& ex) {
         engine->impl->last_error = ex.what();
