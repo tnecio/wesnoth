@@ -8,31 +8,28 @@ Try to address issues one-by-one, updating the tracker after each is handled. Th
 
 ### OPEN
 
-- Narration:
-  - Missing background images in `story` parts (the background is black)
-
-- Navigation — start new campaign after Back button:
-  - Root cause: `launch_game_thread` called `e.game_thread.join()` while the game thread was blocked in `wait_for_command()` (waiting on `cmd_cv`), but `set_done()` only notifies `ev_cv`. The join deadlocked, preventing any new campaign from starting.
-  - Fix: `launch_game_thread` now sends `WL_CMD_QUIT` through the channel when `channel->game_waiting` is true. The game thread receives it in `play_human_turn`, posts `WL_OK`, and throws `quit_game_exception()`. The game thread then exits, allowing `join()` to complete.
-  - Issue: After starting one campaign, and clicking Back to Menu at the Victory screen, the next campaign fails with `Uncaught TypeError: can't access property "instanceCount", geometry is null`
-
-- Engine:
-  - After finishing the scenario, the console logs this warning for each unit that remained alive at the end: `[Game] reconcileUnits: removing unit wl_test_leader not seen in snapshot (expected UNIT_DIE)`
-
-- Messages/Objectives:
-  - When starting a scenario, the `message` tags from the `start` event in WML do not appear. Similarily the pop-up with scenario objectives also does not appear.
-
 - Animation:
   - Enemy units' move animation is missing during their turn.
-  - Combat animation is missing.
+  - Combat animation is missing. This is jarring.
 
 - Map:
   - Terrain display should be resolved using code from terrain_layers.cpp
+
+- Units:
+  - UI allows choosing an attack between adjacent enemy units (i.e. when an enemy unit is selected, and another enemy is adjacent, and you select the other enemy, the combat UI appears as if it was possible to command one enemy unit to attack another)
 
 
 ### IN PROGRESS
 
 ### PENDING VERIFICATION
+
+- Narration / Messages / Objectives — not appearing:
+  - Root cause: `GamePage.svelte` had no block to render `game.pendingNarrative`. `_showNarrative()` in `GameSession` correctly set `pendingNarrative` and returned an awaited Promise, but since nothing rendered the value or called `dismissNarrative()`, the drain loop blocked permanently and no subsequent events (including FULL_STATE) were processed.
+  - Fix: Added `{#if game.pendingNarrative}` block to `GamePage.svelte`. Story variant (`variant === 'story'`) renders as full-screen `NarrativeSlide`; message and objectives variants render as the `MessageModal` panel. `onDismiss` calls `game.dismissNarrative()` which resolves the Promise and unblocks the drain loop.
+
+- Navigation — start new campaign after Back button (`geometry is null` crash):
+  - Root cause: `sharedFogCtx` in `Hex.ts` is a module-level `PIXI.GraphicsContext` singleton. When `board.destroy()` destroys the PIXI renderer, the GPU-side geometry backing that context is freed. On the next campaign a new PIXI renderer is created, but the stale context still holds a null geometry reference — when PIXI tries to batch-render fog hexes it reads `geometry.instanceCount` → crash.
+  - Fix: Exported `resetSharedHexState()` from `Hex.ts` that sets `sharedFogCtx = null`. `Board.destroy()` calls it after `app.destroy()`, ensuring the next session builds a fresh context for the new renderer.
 
 ### DONE
 
@@ -59,3 +56,11 @@ Try to address issues one-by-one, updating the tracker after each is handled. Th
 - Engine warning — unit not seen in snapshot:
   - Root cause: Same `WL_EVENT` enum mismatch. C++'s `UNIT_DIE=11` was decoded as `UNIT_DISMISS=11` in JS (which returns null), so die events were dropped. C++'s `UNIT_ADVANCE=12` was decoded as `UNIT_DIE=12`, causing advancing units to be incorrectly removed.
   - Fix: Enum mismatch corrected (see Narration fix above) — `UNIT_DIE` now correctly matches C++'s value 11.
+
+- Engine warning — units not seen in snapshot at scenario end:
+  - Root cause: `reconcileUnits` warned whenever a unit disappeared without a prior `UNIT_DIE` event. At scenario end, surviving units legitimately vanish from the snapshot — no `UNIT_DIE` is fired for them.
+  - Fix: `reconcile()` now accepts an optional `{ gameOver?: boolean }` option. `GameController.applyState()` passes `gameOver: !!this.gameOver`. `reconcileUnits` only emits the warning when `gameOver` is false, so mid-game unexpected removals still surface but end-of-scenario cleanup is silent.
+
+- Structure — two separate URLs for menu and game:
+  - Root cause: routing was purely state-based (`ctrl.page`); `history.pushState` was called without a path, leaving the URL unchanged. No mechanism to redirect a direct load of `/game`.
+  - Fix: `startCampaign` now pushes `/game` via `history.pushState({}, '', '/game')`. `returnToMenu` calls `history.replaceState({}, '', '/')` when the URL isn't already `/`. Constructor detects a direct load at `/game` and replaces it with `/`. `App.svelte` simplified: shows `MainMenu` for all non-game states (`loading` splash merged in). `MainMenu.svelte` redesigned with a "Campaigns" button that toggles the `CampaignPicker` inline; engine load progress shown in a status bar at the bottom.

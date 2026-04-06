@@ -177,7 +177,7 @@ static void print_event(const WL_Event* ev)
         break;
 
     case WL_EVENT_STORY:
-        printf("[EVENT] story title=%s text=%s\n", ev->story.title ? ev->story.title : "", ev->story.text ? ev->story.text : "");
+        printf("[EVENT] story title=%s text=%s background=%s\n", ev->story.title ? ev->story.title : "", ev->story.text ? ev->story.text : "", ev->story.background);
         break;
 
     case WL_EVENT_OBJECTIVES_UPDATE:

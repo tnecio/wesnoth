@@ -20,7 +20,15 @@
 WL_Event* wl_materialize_event(const WLEventInternal& d,
                                 std::vector<char>& buf)
 {
-    WLArena arena(256);
+    /* Pre-reserve enough arena capacity to hold all strings for this event
+     * without any reallocation.  A reallocation mid-event invalidates the
+     * const char* pointers already returned by store(), causing later
+     * store() results to be correctly placed but earlier ones to become
+     * dangling — which the relocate() step then maps to nullptr. */
+    size_t need = d.s1.size() + d.s2.size() + d.s3.size()
+                + d.s4.size() + d.s5.size() + 8; /* +8 for null terminators */
+    for(const auto& opt : d.options) need += opt.size() + 1;
+    WLArena arena(std::max<size_t>(256, need));
 
     /* Build a stack-local WL_Event, storing all strings into the arena.
      * After the switch, we allocate a contiguous buffer and relocate every
