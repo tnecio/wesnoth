@@ -385,6 +385,8 @@ if(EMSCRIPTEN)
 		-sPTHREAD_POOL_SIZE=2
 		-sPROXY_TO_PTHREAD=0
 		-sEXPORTED_FUNCTIONS=_malloc,_free
+		-sASSERTIONS=1
+		-O1
 	)
 	target_link_libraries(wesnothlite
 		${common-external-libs}
