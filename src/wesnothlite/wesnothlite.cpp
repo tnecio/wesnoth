@@ -380,11 +380,11 @@ const WL_Event* wl_step(WL_Engine* engine)
 
     std::unique_lock lock(ch.ev_mtx);
     ch.ev_cv.wait(lock, [&] {
-        return !ch.events.empty() || ch.game_waiting || ch.game_done;
+        return !ch.events.empty() || ch.game_waiting || ch.awaiting_ack || ch.game_done;
     });
 
     if(ch.events.empty())
-        return nullptr;   /* Game is waiting for input (or done). */
+        return nullptr;   /* Game is waiting for input, awaiting narrative ACK, or done. */
 
     WLEventInternal data = std::move(ch.events.front());
     ch.events.pop_front();

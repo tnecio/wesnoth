@@ -259,12 +259,39 @@ void wl_hook_music_change(const std::string& path,
 }
 
 int wl_hook_message(const std::string& speaker,
+                    const std::string& portrait,
                     const std::string& text,
                     const std::vector<std::string>& options)
 {
     if(!tl_channel) return 0;
-    std::vector<std::string> opts = options.empty()
-        ? std::vector<std::string>{""}   /* "Continue" */
-        : options;
-    return tl_channel->request_choice(WL_CHOICE_MESSAGE, text, opts, speaker);
+
+    /* Post the narrative message event so the frontend can display it
+     * with speaker name, portrait and text before asking for a choice. */
+    {
+        WLEventInternal ev;
+        ev.type = WL_EVENT_MESSAGE;
+        ev.s1   = speaker;
+        /* Resolve portrait path to WASM VFS absolute path (same as backgrounds). */
+        if(!portrait.empty()) {
+            auto resolved = filesystem::get_binary_file_location("images", portrait);
+            ev.s2 = resolved ? *resolved : portrait;
+        }
+        ev.s3 = text;
+        tl_channel->post_event(std::move(ev));
+    }
+
+    /* Determine whether there are real player choices beyond a simple dismiss. */
+    bool has_real_options = options.size() > 1 ||
+                            (options.size() == 1 && !options[0].empty());
+
+    if(has_real_options) {
+        /* Real choices: also post WL_EVENT_CHOICE_NEEDED so the frontend
+         * can present the options after the player dismisses the message.
+         * The game thread blocks until the player picks an option. */
+        return tl_channel->request_choice(WL_CHOICE_MESSAGE, text, options, speaker);
+    } else {
+        /* Simple message: block until the frontend ACKs with CHOOSE_OPTION=0. */
+        //tl_channel->await_ack();  // TEST: non-blocking
+        return 0;
+    }
 }

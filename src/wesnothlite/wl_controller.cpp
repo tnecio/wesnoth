@@ -53,6 +53,27 @@ public:
         , ch_(std::move(ch))
     {}
 
+    void check_objectives() override
+    {
+        /* playsingle_controller::check_objectives() uses gui_->viewing_team()
+         * which returns a dummy team in the headless build (objectives_changed
+         * is always false on it), so objectives are never shown.  Override to
+         * iterate the real teams directly and emit WL_EVENT_OBJECTIVES_UPDATE
+         * for every team whose objectives changed since the last check. */
+        for(team& t : get_teams()) {
+            if(is_regular_game_end()) break;
+            if(!t.objectives_changed()) continue;
+            if(!t.objectives().empty() && tl_channel) {
+                WLEventInternal ev;
+                ev.type = WL_EVENT_OBJECTIVES_UPDATE;
+                ev.i1   = t.side();
+                ev.s1   = t.objectives().str();
+                tl_channel->post_event(std::move(ev));
+            }
+            t.reset_objectives_changed();
+        }
+    }
+
 protected:
     void play_human_turn() override
     {

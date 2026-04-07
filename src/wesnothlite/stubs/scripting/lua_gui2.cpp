@@ -6,6 +6,7 @@
 #include "scripting/lua_common.hpp"
 #include "scripting/push_check.hpp"
 #include "log.hpp"
+#include "tstring.hpp"
 #include "lua/lauxlib.h"
 #include "wl_hooks.hpp"
 #include <string>
@@ -21,17 +22,23 @@ namespace lua_gui2 {
 // arg 1: config table { title=speaker, message=text, portrait=... }
 // arg 2 (optional): array of option strings
 int show_message_dialog(lua_State* L) {
+    // Use luaW_totstring to handle both plain Lua strings and Wesnoth's
+    // t_string userdata (translatable strings).  lua_isstring() returns false
+    // for t_string userdata, and luaL_tolstring()'s __tostring call can have
+    // unintended side-effects in the Wesnoth Lua environment.
     auto get_field = [&](int idx, const char* key) -> std::string {
         lua_getfield(L, idx, key);
-        std::string v = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+        t_string v;
+        bool ok = luaW_totstring(L, -1, v);
         lua_pop(L, 1);
-        return v;
+        return ok ? v.str() : "";
     };
 
-    std::string speaker, message;
+    std::string speaker, message, portrait;
     if(lua_istable(L, 1)) {
-        speaker = get_field(1, "title");
-        message = get_field(1, "message");
+        speaker  = get_field(1, "title");
+        message  = get_field(1, "message");
+        portrait = get_field(1, "portrait");
     }
     if(message.empty() && speaker.empty()) {
         lua_pushinteger(L, 0);
@@ -43,12 +50,14 @@ int show_message_dialog(lua_State* L) {
         lua_Integer n = luaL_len(L, 2);
         for(lua_Integer i = 1; i <= n; ++i) {
             lua_rawgeti(L, 2, i);
-            if(lua_isstring(L, -1)) options.push_back(lua_tostring(L, -1));
+            t_string opt;
+            if(luaW_totstring(L, -1, opt) && !opt.empty())
+                options.push_back(opt.str());
             lua_pop(L, 1);
         }
     }
 
-    int result = wl_hook_message(speaker, message, options);
+    int result = wl_hook_message(speaker, portrait, message, options);
     lua_pushinteger(L, result);
     return 1;
 }

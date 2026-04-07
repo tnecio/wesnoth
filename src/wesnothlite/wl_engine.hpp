@@ -80,8 +80,9 @@ struct WLChannel {
     std::mutex              ev_mtx;
     std::condition_variable ev_cv;
     std::deque<WLEventInternal> events;
-    bool game_waiting = false;  /* game thread blocked waiting for a command */
-    bool game_done    = false;
+    bool game_waiting   = false;  /* game thread blocked waiting for a command */
+    bool awaiting_ack   = false;  /* game thread blocked in await_ack() for narrative ACK */
+    bool game_done      = false;
 
     /* ── Commands: API thread writes, game thread reads ── */
     std::mutex              cmd_mtx;
@@ -182,8 +183,44 @@ struct WLChannel {
     }
 
     /**
+     * Called by the game thread: block until the API thread sends any
+     * CHOOSE_OPTION (i.e. the player dismisses a narrative or dialog).
+     * Used for WL_EVENT_MESSAGE so the game thread blocks waiting for
+     * the player to acknowledge the message, without posting a second
+     * WL_EVENT_CHOICE_NEEDED event.
+     */
+    void await_ack()
+    {
+        /* Set choice_pending BEFORE signalling ev_cv so that any caller
+         * that wakes from wl_step() seeing awaiting_ack==true can safely
+         * call deliver_choice() without a race on choice_pending. */
+        {
+            std::lock_guard choice_lock(choice_mtx);
+            choice_pending = true;
+            pending_choice_result.reset();
+        }
+
+        /* Signal wl_step() to return null while we wait for the ACK. */
+        {
+            std::lock_guard ev_lock(ev_mtx);
+            awaiting_ack = true;
+        }
+        ev_cv.notify_one();
+
+        std::unique_lock lock(choice_mtx);
+        choice_result_cv.wait(lock, [this] { return pending_choice_result.has_value(); });
+        pending_choice_result.reset();
+        choice_pending = false;
+
+        {
+            std::lock_guard ev_lock(ev_mtx);
+            awaiting_ack = false;
+        }
+    }
+
+    /**
      * Called by the API thread (wl_choose()): deliver a choice result to
-     * the game thread blocked in request_choice().
+     * the game thread blocked in request_choice() or await_ack().
      * Returns true if a choice was pending and was delivered.
      */
     bool deliver_choice(int option_index)

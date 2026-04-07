@@ -559,8 +559,9 @@ int main(int argc, char** argv)
     /* ── Event / action loop ── */
     bool quit = false;
     bool game_over = false;
-    bool waiting = false;     /* true when wl_step returned NULL */
+    bool waiting = false;      /* true when wl_step returned NULL */
     bool pending_choice = false;
+    bool pending_message_ack = false; /* auto-ACK for WL_EVENT_MESSAGE (always, any side) */
 
     while(!quit && !game_over) {
 
@@ -568,7 +569,7 @@ int main(int argc, char** argv)
         while(!waiting) {
             const WL_Event* ev = wl_step(eng);
             if(!ev) {
-                /* Engine is waiting for human input. */
+                /* Engine is waiting for input (or awaiting narrative ACK). */
                 waiting = true;
                 break;
             }
@@ -577,6 +578,14 @@ int main(int argc, char** argv)
             if(ev->type == WL_EVENT_SCENARIO_END) {
                 game_over = true;
                 break;
+            }
+            if(ev->type == WL_EVENT_MESSAGE) {
+                /* The game thread will block in await_ack() after posting this event,
+                 * setting choice_pending=true then awaiting_ack=true, then notifying
+                 * ev_cv.  Let the loop call wl_step() once more so it blocks until
+                 * awaiting_ack is set — only then is it safe to deliver the ACK. */
+                pending_message_ack = true;
+                continue;  /* fall through to next wl_step() call */
             }
             if(ev->type == WL_EVENT_CHOICE_NEEDED) {
                 pending_choice = true;
@@ -590,6 +599,19 @@ int main(int argc, char** argv)
         }
 
         if(game_over || quit) break;
+
+        /* Auto-ACK narrative messages regardless of whose turn it is. */
+        if(pending_message_ack) {
+            WL_Command c{}; c.type = WL_CMD_CHOOSE; c.choose.option = 0;
+            WL_Status r = wl_send(eng, &c);
+            fprintf(stderr, "[DBG] message ACK status=%d\n", (int)r);
+            pending_message_ack = false;
+            waiting = false;
+            continue;
+        }
+
+        fprintf(stderr, "[DBG] post-drain: game_over=%d quit=%d pending_choice=%d pending_msg_ack=%d waiting=%d\n",
+                game_over, quit, pending_choice, pending_message_ack, waiting);
 
         /* ── Decide what to do while waiting ── */
         WL_GameInfo* gi = wl_query_game(eng);
