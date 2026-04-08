@@ -343,6 +343,8 @@ endif()
 if(EMSCRIPTEN)
 	add_executable(wesnothlite
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnoth_engine.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_bindings.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_snapshots.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_events.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_lua.cpp
@@ -362,6 +364,7 @@ if(EMSCRIPTEN)
 		-pthread
 	)
 	target_link_options(wesnothlite PRIVATE
+		--bind
 		-sMODULARIZE=1
 		-sEXPORT_ES6=1
 		-sEXPORT_NAME=WesnothLite
@@ -397,6 +400,7 @@ if(EMSCRIPTEN)
 else()
 	add_library(wesnothlite SHARED
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnoth_engine.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_snapshots.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_events.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_lua.cpp
