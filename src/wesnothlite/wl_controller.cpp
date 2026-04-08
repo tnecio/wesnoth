@@ -64,11 +64,7 @@ public:
             if(is_regular_game_end()) break;
             if(!t.objectives_changed()) continue;
             if(!t.objectives().empty() && tl_channel) {
-                WLEventInternal ev;
-                ev.type = WL_EVENT_OBJECTIVES_UPDATE;
-                ev.i1   = t.side();
-                ev.s1   = t.objectives().str();
-                tl_channel->post_event(std::move(ev));
+                tl_channel->post_event(WLEv::ObjectivesUpdate{t.side(), t.objectives().str()});
             }
             t.reset_objectives_changed();
         }
@@ -78,13 +74,7 @@ protected:
     void play_human_turn() override
     {
         /* Tell the API thread we are ready for commands. */
-        {
-            WLEventInternal ev;
-            ev.type = WL_EVENT_WAITING_FOR_INPUT;
-            ev.i1   = current_side();
-            ev.i2   = static_cast<int>(turn());
-            ch_->post_event(std::move(ev));
-        }
+        ch_->post_event(WLEv::WaitingForInput{current_side(), static_cast<int>(turn())});
         ch_->set_waiting(true);
 
         while(!should_return_to_play_side()) {
@@ -199,17 +189,16 @@ private:
         /* Post the move event with full path before the move executes.
          * The Lua moveto handler will skip its duplicate via tl_skip_next_moveto. */
         {
-            WLEventInternal ev;
-            ev.type = WL_EVENT_UNIT_MOVE;
-            ev.s1   = it->id();
-            ev.i1   = it->side();
-            ev.loc1 = { from.wml_x(), from.wml_y() };
-            ev.loc2 = { to.wml_x(),   to.wml_y() };
             int n = std::min(static_cast<int>(route.steps.size()), WL_MAX_PATH);
-            ev.path.resize(n);
+            std::vector<WL_Loc> path(n);
             for(int i = 0; i < n; ++i)
-                ev.path[i] = { route.steps[i].wml_x(), route.steps[i].wml_y() };
-            tl_channel->post_event(std::move(ev));
+                path[i] = { route.steps[i].wml_x(), route.steps[i].wml_y() };
+            tl_channel->post_event(WLEv::UnitMove{
+                it->id(), it->side(),
+                { from.wml_x(), from.wml_y() },
+                { to.wml_x(),   to.wml_y() },
+                std::move(path)
+            });
         }
         tl_skip_next_moveto = true;
         actions::move_unit_and_record(route.steps, &undo_stack());
@@ -353,11 +342,7 @@ void wl_run_game_thread(WLEngineImpl* e)
 
         /* Emit LOADING_CONFIG so the JS side can show a progress message
          * while the slow WML parse runs off the API/JS thread. */
-        {
-            WLEventInternal ev;
-            ev.type = WL_EVENT_LOADING_CONFIG;
-            ch.post_event(std::move(ev));
-        }
+        ch.post_event(WLEv::LoadingConfig{});
 
         {
             auto _t0 = std::chrono::steady_clock::now();
@@ -380,10 +365,7 @@ void wl_run_game_thread(WLEngineImpl* e)
             }
             if(scenario_cfg.empty()) {
                 e->last_error = std::string("scenario not found: ") + sid;
-                WLEventInternal ev;
-                ev.type    = WL_EVENT_SCENARIO_END;
-                ev.outcome = WL_OUTCOME_QUIT;
-                ch.post_event(std::move(ev));  // TODO: refactor error handling to surface errors like this in wl-cli
+                ch.post_event(WLEv::ScenarioEnd{WL_OUTCOME_QUIT, ""});  // TODO: refactor error handling to surface errors like this in wl-cli
                 tl_channel = nullptr;
                 ch.set_done();
                 return;
@@ -400,11 +382,7 @@ void wl_run_game_thread(WLEngineImpl* e)
         state.expand_mp_options();
 
         /* Emit scenario-start event. */
-        {
-            WLEventInternal ev;
-            ev.type = WL_EVENT_SCENARIO_START;
-            ch.post_event(std::move(ev));
-        }
+        ch.post_event(WLEv::ScenarioStart{});
 
         const config& level = state.get_starting_point();
         WLController controller(level, state, e->channel);
@@ -426,25 +404,16 @@ void wl_run_game_thread(WLEngineImpl* e)
         }
 
         /* Emit scenario-end event. */
-        WLEventInternal ev;
-        ev.type    = WL_EVENT_SCENARIO_END;
-        ev.outcome = (result == level_result::type::victory)
-                         ? WL_OUTCOME_VICTORY
-                         : WL_OUTCOME_DEFEAT;
-        ev.s1 = next_scenario_id;
-        ch.post_event(std::move(ev));
+        ch.post_event(WLEv::ScenarioEnd{
+            (result == level_result::type::victory) ? WL_OUTCOME_VICTORY : WL_OUTCOME_DEFEAT,
+            next_scenario_id
+        });
 
     } catch(const savegame::load_game_exception&) {
-        WLEventInternal ev;
-        ev.type    = WL_EVENT_SCENARIO_END;
-        ev.outcome = WL_OUTCOME_QUIT;
-        ch.post_event(std::move(ev));
+        ch.post_event(WLEv::ScenarioEnd{WL_OUTCOME_QUIT, ""});
     } catch(...) {
         e->game_exception = std::current_exception();
-        WLEventInternal ev;
-        ev.type    = WL_EVENT_SCENARIO_END;
-        ev.outcome = WL_OUTCOME_QUIT;
-        ch.post_event(std::move(ev));
+        ch.post_event(WLEv::ScenarioEnd{WL_OUTCOME_QUIT, ""});
     }
 
     tl_channel = nullptr;

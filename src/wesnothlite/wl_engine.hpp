@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <variant>
 #include <vector>
 
 class commandline_options;
@@ -23,40 +24,80 @@ class game_config_manager;
 class saved_game;
 
 /* =========================================================================
- * Internal event representation
+ * Typed per-event structs (WLEv namespace)
  *
- * Mirrors WL_Event but uses std::string for all text so lifetime is trivial.
- * Converted to a heap-allocated WL_Event by materialize_event().
+ * Each struct carries exactly the fields that event type needs.
+ * WLEventInternal is a std::variant over all of them.
  * ========================================================================= */
-struct WLEventInternal {
-    WL_EventType type = WL_EVENT_SCENARIO_START;
+namespace WLEv {
 
-    /* Generic string slots (semantics depend on event type). */
-    std::string s1, s2, s3, s4, s5;   /* ids, type-ids, texts, paths … */
+struct LoadingConfig  {};
+struct ScenarioStart  {};
+struct ScenarioEnd    { WL_Outcome outcome = WL_OUTCOME_NONE; std::string next_scenario; };
+struct TurnStart      { int turn = 0; };
+struct SideTurnStart  { int side = 0; int turn = 0; };
+struct SideTurnEnd    { int side = 0; int turn = 0; };
+struct WaitingForInput{ int side = 0; int turn = 0; };
 
-    /* Generic integer slots. */
-    int i1 = 0, i2 = 0, i3 = 0, i4 = 0, i5 = 0, i6 = 0;
-
-    /* Locations. */
-    WL_Loc loc1{0, 0}, loc2{0, 0};
-
-    /* Move path. */
+struct UnitMove {
+    std::string unit_id;
+    int         side = 0;
+    WL_Loc      from{0,0}, to{0,0};
     std::vector<WL_Loc> path;
-
-    /* Combat. */
+};
+struct UnitAttack {
+    std::string     attacker_id, defender_id;
+    int             attacker_side = 0, defender_side = 0;
+    WL_Loc          attacker_loc{0,0}, defender_loc{0,0};
     WL_CombatResult cr_att{}, cr_def{};
     std::vector<WL_Blow> blows;
-
-    /* Choice. */
-    WL_ChoiceKind choice_kind = WL_CHOICE_MESSAGE;
-    std::vector<std::string> options;
-
-    /* Outcome. */
-    WL_Outcome outcome = WL_OUTCOME_NONE;
-
-    /* Status flags. */
-    WL_UnitStatusFlags status_flags = WL_STATUS_NONE;
 };
+struct UnitSpawn   { std::string unit_type_id, unit_id; int side = 0; WL_Loc at{0,0}; };
+struct UnitDismiss { std::string unit_id, unit_type_id; int side = 0; };
+struct UnitDie     { std::string unit_id, unit_type_id, killer_id; int side = 0; WL_Loc loc{0,0}; };
+struct UnitAdvance { std::string unit_id, from_type_id, to_type_id; int side = 0; WL_Loc loc{0,0}; };
+struct UnitXP      { std::string unit_id; int side = 0; WL_Loc loc{0,0}; int xp_gained=0, xp_total=0, xp_needed=0; };
+struct UnitHeal    { std::string unit_id; int side = 0; WL_Loc loc{0,0}; int amount = 0; };
+struct UnitStatus  { std::string unit_id; int side = 0; WL_Loc loc{0,0}; WL_UnitStatusFlags flags = WL_STATUS_NONE; };
+
+struct VillageCapture { WL_Loc loc{0,0}; int old_side = 0, new_side = 0; };
+
+struct Message     { std::string speaker, portrait, text; };
+struct Story       { std::string title, text, background; };
+struct ObjectivesUpdate { int side = 0; std::string text; };
+struct ChoiceNeeded { WL_ChoiceKind kind = WL_CHOICE_MESSAGE; std::string prompt, speaker; std::vector<std::string> options; };
+
+struct Sound       { std::string path; };
+struct MusicChange { std::string path, title; };
+
+} // namespace WLEv
+
+/* WLEventInternal: the one type posted through WLChannel::events. */
+using WLEventInternal = std::variant<
+    WLEv::LoadingConfig,
+    WLEv::ScenarioStart,
+    WLEv::ScenarioEnd,
+    WLEv::TurnStart,
+    WLEv::SideTurnStart,
+    WLEv::SideTurnEnd,
+    WLEv::WaitingForInput,
+    WLEv::UnitMove,
+    WLEv::UnitAttack,
+    WLEv::UnitSpawn,
+    WLEv::UnitDismiss,
+    WLEv::UnitDie,
+    WLEv::UnitAdvance,
+    WLEv::UnitXP,
+    WLEv::UnitHeal,
+    WLEv::UnitStatus,
+    WLEv::VillageCapture,
+    WLEv::Message,
+    WLEv::Story,
+    WLEv::ObjectivesUpdate,
+    WLEv::ChoiceNeeded,
+    WLEv::Sound,
+    WLEv::MusicChange
+>;
 
 /* =========================================================================
  * Command: API thread → game thread
@@ -164,13 +205,7 @@ struct WLChannel {
                        const std::vector<std::string>& options,
                        const std::string& speaker = "")
     {
-        WLEventInternal ev;
-        ev.type        = WL_EVENT_CHOICE_NEEDED;
-        ev.choice_kind = kind;
-        ev.s1          = prompt;
-        ev.s2          = speaker;
-        ev.options     = options;
-        post_event(std::move(ev));
+        post_event(WLEv::ChoiceNeeded{kind, prompt, speaker, options});
 
         std::unique_lock lock(choice_mtx);
         choice_pending = true;

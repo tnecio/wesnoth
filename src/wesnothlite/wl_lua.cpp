@@ -31,48 +31,33 @@ thread_local bool       tl_skip_next_moveto = false;
 
 namespace {
 
-static WLEventInternal make_unit_loc_event(WL_EventType t, lua_State* L)
-{
-    /* args: unit_id(1) type_id(2) side(3) x(4) y(5) */
-    WLEventInternal ev;
-    ev.type = t;
-    ev.s1   = luaL_optstring(L, 1, "");  /* unit_id  */
-    ev.s2   = luaL_optstring(L, 2, "");  /* type_id  */
-    ev.i1   = static_cast<int>(luaL_optinteger(L, 3, 0)); /* side */
-    ev.loc1 = { static_cast<int>(luaL_optinteger(L, 4, 0)),
-                static_cast<int>(luaL_optinteger(L, 5, 0)) };
-    return ev;
-}
-
 /* wesnoth.wl_post_move(unit_id, type_id, side, from_x, from_y, to_x, to_y) */
 static int lua_post_move(lua_State* L)
 {
     if(!tl_channel) return 0;
     if(tl_skip_next_moveto) { tl_skip_next_moveto = false; return 0; }
-    WLEventInternal ev;
-    ev.type = WL_EVENT_UNIT_MOVE;
-    ev.s1   = luaL_optstring(L, 1, "");   /* unit_id */
-    ev.s2   = luaL_optstring(L, 2, "");   /* type_id (unused for move) */
-    ev.i1   = static_cast<int>(luaL_optinteger(L, 3, 0)); /* side */
-    ev.loc1 = { static_cast<int>(luaL_optinteger(L, 4, 0)),
-                static_cast<int>(luaL_optinteger(L, 5, 0)) }; /* from */
-    ev.loc2 = { static_cast<int>(luaL_optinteger(L, 6, 0)),
-                static_cast<int>(luaL_optinteger(L, 7, 0)) }; /* to   */
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::UnitMove{
+        luaL_optstring(L, 1, ""),   /* unit_id */
+        static_cast<int>(luaL_optinteger(L, 3, 0)), /* side */
+        { static_cast<int>(luaL_optinteger(L, 4, 0)),
+          static_cast<int>(luaL_optinteger(L, 5, 0)) }, /* from */
+        { static_cast<int>(luaL_optinteger(L, 6, 0)),
+          static_cast<int>(luaL_optinteger(L, 7, 0)) }, /* to */
+        {} /* path — not available from Lua moveto hook */
+    });
     return 0;
 }
 
 static int spawn_internal(lua_State* L)
 {
     if(!tl_channel) return 0;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_UNIT_SPAWN;
-    ev.s1   = luaL_optstring(L, 1, "");   /* type_id */
-    ev.s2   = luaL_optstring(L, 2, "");   /* unit_id */
-    ev.i1   = static_cast<int>(luaL_optinteger(L, 3, 0));
-    ev.loc1 = { static_cast<int>(luaL_optinteger(L, 4, 0)),
-                static_cast<int>(luaL_optinteger(L, 5, 0)) };
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::UnitSpawn{
+        luaL_optstring(L, 1, ""),   /* unit_type_id */
+        luaL_optstring(L, 2, ""),   /* unit_id */
+        static_cast<int>(luaL_optinteger(L, 3, 0)), /* side */
+        { static_cast<int>(luaL_optinteger(L, 4, 0)),
+          static_cast<int>(luaL_optinteger(L, 5, 0)) } /* at */
+    });
     return 0;
 }
 
@@ -86,15 +71,14 @@ static int lua_post_recall(lua_State* L)  { return spawn_internal(L); }
 static int lua_post_die(lua_State* L)
 {
     if(!tl_channel) return 0;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_UNIT_DIE;
-    ev.s1   = luaL_optstring(L, 1, "");
-    ev.s2   = luaL_optstring(L, 2, "");
-    ev.i1   = static_cast<int>(luaL_optinteger(L, 3, 0));
-    ev.loc1 = { static_cast<int>(luaL_optinteger(L, 4, 0)),
-                static_cast<int>(luaL_optinteger(L, 5, 0)) };
-    ev.s3   = luaL_optstring(L, 6, "");   /* killer_id */
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::UnitDie{
+        luaL_optstring(L, 1, ""),   /* unit_id */
+        luaL_optstring(L, 2, ""),   /* unit_type_id */
+        luaL_optstring(L, 6, ""),   /* killer_id */
+        static_cast<int>(luaL_optinteger(L, 3, 0)), /* side */
+        { static_cast<int>(luaL_optinteger(L, 4, 0)),
+          static_cast<int>(luaL_optinteger(L, 5, 0)) } /* loc */
+    });
     return 0;
 }
 
@@ -102,11 +86,10 @@ static int lua_post_die(lua_State* L)
 static int lua_post_turn_end(lua_State* L)
 {
     if(!tl_channel) return 0;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_SIDE_TURN_END;
-    ev.i1   = static_cast<int>(luaL_optinteger(L, 1, 0));
-    ev.i2   = static_cast<int>(luaL_optinteger(L, 2, 0));
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::SideTurnEnd{
+        static_cast<int>(luaL_optinteger(L, 1, 0)), /* side */
+        static_cast<int>(luaL_optinteger(L, 2, 0))  /* turn */
+    });
     return 0;
 }
 
@@ -114,12 +97,11 @@ static int lua_post_turn_end(lua_State* L)
 static int lua_post_message(lua_State* L)
 {
     if(!tl_channel) return 0;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_MESSAGE;
-    ev.s1   = luaL_optstring(L, 1, "");
-    ev.s2   = luaL_optstring(L, 2, "");
-    ev.s3   = luaL_optstring(L, 3, "");
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::Message{
+        luaL_optstring(L, 1, ""), /* speaker */
+        luaL_optstring(L, 2, ""), /* portrait */
+        luaL_optstring(L, 3, "")  /* text */
+    });
     return 0;
 }
 
@@ -234,28 +216,19 @@ void wl_hook_story_part(const std::string& title,
                         const std::string& background)
 {
     if(!tl_channel) return;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_STORY;
-    ev.s1   = title;
-    ev.s2   = text;
-    // Resolve the WML image path to an absolute filesystem path so the
-    // browser can load it directly (e.g. "story/foo.webp" → "/game/data/…").
+    std::string resolved_bg;
     if(!background.empty()) {
-        auto resolved = filesystem::get_binary_file_location("images", background);
-        ev.s3 = resolved ? *resolved : background;
+        auto r = filesystem::get_binary_file_location("images", background);
+        resolved_bg = r ? *r : background;
     }
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::Story{title, text, resolved_bg});
 }
 
 void wl_hook_music_change(const std::string& path,
                           const std::string& title)
 {
     if(!tl_channel) return;
-    WLEventInternal ev;
-    ev.type = WL_EVENT_MUSIC_CHANGE;
-    ev.s1   = path;
-    ev.s2   = title;
-    tl_channel->post_event(std::move(ev));
+    tl_channel->post_event(WLEv::MusicChange{path, title});
 }
 
 int wl_hook_message(const std::string& speaker,
@@ -265,20 +238,16 @@ int wl_hook_message(const std::string& speaker,
 {
     if(!tl_channel) return 0;
 
+    /* Resolve portrait path to WASM VFS absolute path (same as backgrounds). */
+    std::string resolved_portrait;
+    if(!portrait.empty()) {
+        auto r = filesystem::get_binary_file_location("images", portrait);
+        resolved_portrait = r ? *r : portrait;
+    }
+
     /* Post the narrative message event so the frontend can display it
      * with speaker name, portrait and text before asking for a choice. */
-    {
-        WLEventInternal ev;
-        ev.type = WL_EVENT_MESSAGE;
-        ev.s1   = speaker;
-        /* Resolve portrait path to WASM VFS absolute path (same as backgrounds). */
-        if(!portrait.empty()) {
-            auto resolved = filesystem::get_binary_file_location("images", portrait);
-            ev.s2 = resolved ? *resolved : portrait;
-        }
-        ev.s3 = text;
-        tl_channel->post_event(std::move(ev));
-    }
+    tl_channel->post_event(WLEv::Message{speaker, resolved_portrait, text});
 
     /* Determine whether there are real player choices beyond a simple dismiss. */
     bool has_real_options = options.size() > 1 ||
