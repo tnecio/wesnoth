@@ -362,6 +362,7 @@ if(EMSCRIPTEN)
 	)
 	target_link_options(wesnothlite PRIVATE
 		--bind
+		--emit-tsd wesnothlite.d.ts
 		-sMODULARIZE=1
 		-sEXPORT_ES6=1
 		-sEXPORT_NAME=WesnothLite
