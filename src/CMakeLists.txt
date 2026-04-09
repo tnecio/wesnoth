@@ -342,14 +342,11 @@ endif()
 
 if(EMSCRIPTEN)
 	add_executable(wesnothlite
-		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnothlite.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wesnoth_engine.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_bindings.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_snapshots.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_events.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_lua.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_controller.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_queries.cpp
 		${wesnoth_headless_sources}
 		${lua_headless_sources}
 		$<TARGET_OBJECTS:wesnothlite-stubs>
@@ -368,7 +365,7 @@ if(EMSCRIPTEN)
 		-sMODULARIZE=1
 		-sEXPORT_ES6=1
 		-sEXPORT_NAME=WesnothLite
-		-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,setValue,getValue,FS
+		-sEXPORTED_RUNTIME_METHODS=FS
 		-sFORCE_FILESYSTEM=1
 		-lnodefs.js
 		-lidbfs.js
@@ -387,7 +384,7 @@ if(EMSCRIPTEN)
 		-pthread
 		-sPTHREAD_POOL_SIZE=2
 		-sPROXY_TO_PTHREAD=0
-		-sEXPORTED_FUNCTIONS=_malloc,_free
+		-sEXPORTED_FUNCTIONS=
 		-sASSERTIONS=1
 		-O1
 	)
