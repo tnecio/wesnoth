@@ -54,8 +54,10 @@ EMSCRIPTEN_BINDINGS(wesnothlite) {
         .function("queryRecallList",    &WesnothEngine::queryRecallList)
         .function("queryRecruitList",   &WesnothEngine::queryRecruitList)
         .function("queryTeam",          &WesnothEngine::queryTeam)
-        .function("queryReach",         &WesnothEngine::queryReach)
-        .function("queryAttackOptions", &WesnothEngine::queryAttackOptions)
+        .function("queryReach",               &WesnothEngine::queryReach)
+        .function("queryAttackOptions",       &WesnothEngine::queryAttackOptions)
+        .function("queryTerrainAt",           &WesnothEngine::queryTerrainAt)
+        .function("queryUnitTypeAnimations",  &WesnothEngine::queryUnitTypeAnimations)
         ;
 }
 

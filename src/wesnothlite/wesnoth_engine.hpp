@@ -93,6 +93,16 @@ public:
     JsVal queryReach(int x, int y);
     JsVal queryAttackOptions(int ax, int ay, int dx, int dy);
 
+    /** All terrain image layers (background + foreground) for one hex.
+     *  Returns { background: WlTerrainFrame[], foreground: WlTerrainFrame[] }.
+     *  Call once per hex after scenario start; result is stable until map reload. */
+    JsVal queryTerrainAt(int x, int y);
+
+    /** All animation frame sequences for a unit type, grouped by event name.
+     *  Returns Record<string, WlAnimFrame[]>.
+     *  Stable for the life of the loaded game config; cache by type_id. */
+    JsVal queryUnitTypeAnimations(const std::string& type_id);
+
 private:
     WLEngineImpl* impl_;
 

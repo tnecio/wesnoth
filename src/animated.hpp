@@ -86,6 +86,7 @@ public:
 	void set_max_animation_time(const std::chrono::milliseconds& time);
 
 	std::chrono::milliseconds get_animation_duration() const;
+	std::chrono::milliseconds get_frame_duration(std::size_t n) const;
 	const T& get_current_frame() const;
 	std::chrono::milliseconds get_current_frame_begin_time() const;
 	std::chrono::milliseconds get_current_frame_end_time() const;

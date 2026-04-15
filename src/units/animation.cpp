@@ -380,8 +380,27 @@ int unit_animation::matches(const map_location& loc, const map_location& second_
 		const unit_const_ptr& my_unit, const std::string& event, const int value, strike_result::type hit, const const_attack_ptr& attack,
 		const const_attack_ptr& second_attack, int value2) const
 {
-	int result = base_score_;
 	const display& disp = *display::get_singleton();
+	const t_translation::terrain_code terrain = disp.context().map().get_terrain(loc);
+
+	unit_const_ptr second_unit;
+	if(!secondary_unit_filter_.empty()) {
+		const unit_map::const_iterator it = disp.context().units().find(second_loc);
+		if(it.valid()) second_unit = it.get_shared_ptr();
+	}
+
+	return matches_headless(loc, second_loc, my_unit, event, value, hit,
+	                        attack, second_attack, value2, terrain, second_unit);
+}
+
+int unit_animation::matches_headless(const map_location& loc, const map_location& second_loc,
+		const unit_const_ptr& my_unit, const std::string& event, const int value,
+		strike_result::type hit, const const_attack_ptr& attack,
+		const const_attack_ptr& second_attack, int value2,
+		const t_translation::terrain_code& terrain_at_loc,
+		const unit_const_ptr& second_unit) const
+{
+	int result = base_score_;
 
 	if(!event.empty() && !event_.empty()) {
 		if(!utils::contains(event_, event)) {
@@ -392,7 +411,7 @@ int unit_animation::matches(const map_location& loc, const map_location& second_
 	}
 
 	if(!terrain_types_.empty()) {
-		if(!t_translation::terrain_matches(disp.context().map().get_terrain(loc), terrain_types_)) {
+		if(!t_translation::terrain_matches(terrain_at_loc, terrain_types_)) {
 			return MATCH_FAIL;
 		}
 
@@ -423,14 +442,13 @@ int unit_animation::matches(const map_location& loc, const map_location& second_
 		}
 
 		if(!secondary_unit_filter_.empty()) {
-			unit_map::const_iterator unit = disp.context().units().find(second_loc);
-			if(!unit.valid()) {
+			if(!second_unit) {
 				return MATCH_FAIL;
 			}
 
 			for(const config& c : secondary_unit_filter_) {
 				unit_filter f{ vconfig(c) };
-				if(!f(*unit, second_loc)) return MATCH_FAIL;
+				if(!f(*second_unit, second_loc)) return MATCH_FAIL;
 				result++;
 			}
 		}

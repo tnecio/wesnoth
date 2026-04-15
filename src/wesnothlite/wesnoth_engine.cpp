@@ -29,6 +29,9 @@
 
 /* Query headers (mirror wl_queries.cpp) */
 #include "actions/attack.hpp"
+#include "terrain/builder.hpp"
+#include "units/animation.hpp"
+#include "units/frame.hpp"
 #include "game_board.hpp"
 #include "game_data.hpp"
 #include "game_state.hpp"
@@ -49,6 +52,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 
@@ -100,6 +104,10 @@ WesnothEngine::WesnothEngine(const std::string& data_path,
                << " ms";
 
         impl_->initialized = true;
+
+        /* Pre-populate the static terrain-rules table so queryTerrainAt() works
+         * without an active display.  Must be called after init_game_config(). */
+        terrain_builder::set_terrain_rules_cfg(impl_->config_manager->game_config());
     } catch(const std::exception& ex) {
         impl_->last_error = ex.what();
     }
@@ -1187,6 +1195,114 @@ JsVal WesnothEngine::queryAttackOptions(int ax, int ay, int dx, int dy)
     val result = val::object();
     result.set("options",       arr);
     result.set("defaultOption", best_idx);
+    return result;
+#endif
+}
+
+/* =========================================================================
+ * Terrain and animation queries
+ * ========================================================================= */
+
+JsVal WesnothEngine::queryTerrainAt(int x, int y)
+{
+#ifndef __EMSCRIPTEN__
+    (void)x; (void)y;
+    return {};
+#else
+    if(!impl_ || !resources::gameboard) return val::null();
+
+    /* Lazily create the terrain builder the first time it is needed. */
+    if(!impl_->tbuilder) {
+        impl_->tbuilder = std::make_unique<terrain_builder>(
+            config{},
+            &resources::gameboard->map(),
+            std::string("void"),
+            false);
+    }
+
+    const map_location loc(x - 1, y - 1);   // WML 1-based → internal 0-based
+    const std::string tod = resources::tod_manager
+        ? resources::tod_manager->get_time_of_day().id : std::string("morning");
+
+    auto emit_layers = [&](terrain_builder::TERRAIN_TYPE type) {
+        val arr = val::array();
+        const terrain_builder::imagelist* imgs =
+            impl_->tbuilder->get_terrain_at(loc, tod, type);
+        if(!imgs) return arr;
+        for(const auto& anim : *imgs) {
+            const std::size_t n = anim.get_frames_count();
+            for(std::size_t i = 0; i < n; ++i) {
+                const image::locator& lc = anim.get_frame(i);
+                if(lc.is_void()) continue;
+                val entry = val::object();
+                entry.set("path",       resolve_img(lc.get_filename()));
+                entry.set("mods",       lc.get_modifications());
+                entry.set("durationMs", static_cast<int>(anim.get_frame_duration(i).count()));
+                arr.call<void>("push", entry);
+            }
+        }
+        return arr;
+    };
+
+    val obj = val::object();
+    obj.set("background", emit_layers(terrain_builder::BACKGROUND));
+    obj.set("foreground",  emit_layers(terrain_builder::FOREGROUND));
+    return obj;
+#endif
+}
+
+JsVal WesnothEngine::queryUnitTypeAnimations(const std::string& type_id)
+{
+#ifndef __EMSCRIPTEN__
+    (void)type_id;
+    return {};
+#else
+    const unit_type* ut = unit_types.find(type_id);
+    if(!ut) return val::null();
+
+    /* triggers fill_initial_animations() if not yet done */
+    const std::vector<unit_animation>& all_anims = ut->animations();
+
+    /* Default context: grass terrain, no attack/hit context */
+    const t_translation::terrain_code default_terrain = t_translation::GRASS_LAND;
+
+    /* For each event, track the highest-scoring animation */
+    std::map<std::string, std::pair<int, const unit_animation*>> best;
+    for(const unit_animation& anim : all_anims) {
+        for(const std::string& event : anim.get_flags()) {
+            if(event.empty() || event.front() == '_') continue;   // skip internal
+            const int score = anim.matches_headless(
+                map_location::null_location(), map_location::null_location(),
+                nullptr, event, 0, strike_result::type::invalid,
+                nullptr, nullptr, 0,
+                default_terrain, nullptr);
+            if(score != unit_animation::MATCH_FAIL) {
+                auto it = best.find(event);
+                if(it == best.end() || score > it->second.first)
+                    best[event] = {score, &anim};
+            }
+        }
+    }
+
+    val result = val::object();
+    for(const auto& [event, score_anim] : best) {
+        const unit_animation& anim = *score_anim.second;
+        val frames = val::array();
+        const std::size_t n = anim.get_frames_count();
+        for(std::size_t i = 0; i < n; ++i) {
+            const unit_frame& uf = anim.get_frame(i);
+            const frame_parameters p = uf.parameters(std::chrono::milliseconds{0});
+            if(p.image.is_void() && p.sound.empty()) continue;
+            val f = val::object();
+            f.set("image",      resolve_img(p.image.get_filename()));
+            f.set("mods",       p.image.get_modifications() + p.image_mod);
+            f.set("durationMs", static_cast<int>(anim.get_frame_duration(i).count()));
+            f.set("sound",      p.sound);
+            frames.call<void>("push", f);
+        }
+        if(frames["length"].as<int>() > 0)
+            result.set(event, frames);
+    }
     return result;
 #endif
 }

@@ -19,6 +19,7 @@
 #include "color.hpp"
 #include "config.hpp"
 #include "halo.hpp"
+#include "terrain/translation.hpp"
 #include "units/frame.hpp"
 #include "units/ptr.hpp"
 #include "units/strike_result.hpp"
@@ -38,9 +39,39 @@ public:
 		const int value = 0, strike_result::type hit = strike_result::type::invalid, const const_attack_ptr& attack = nullptr, const const_attack_ptr& second_attack = nullptr,
 		int value2 = 0) const;
 
+	/** Headless variant of matches(): accepts terrain code and optional second unit
+	 *  explicitly instead of calling display::get_singleton(). Safe to call without
+	 *  an active display (e.g. from the wesnothlite WASM API).
+	 */
+	int matches_headless(const map_location& loc, const map_location& second_loc,
+		const unit_const_ptr& my_unit, const std::string& event = "",
+		int value = 0, strike_result::type hit = strike_result::type::invalid,
+		const const_attack_ptr& attack = nullptr, const const_attack_ptr& second_attack = nullptr,
+		int value2 = 0,
+		const t_translation::terrain_code& terrain_at_loc = t_translation::NONE_TERRAIN,
+		const unit_const_ptr& second_unit = nullptr) const;
+
 	const unit_frame& get_last_frame() const
 	{
 		return unit_anim_.get_last_frame();
+	}
+
+	/** Number of frames in the main animation sequence. */
+	std::size_t get_frames_count() const
+	{
+		return unit_anim_.get_frames_count();
+	}
+
+	/** Returns the nth frame of the main animation sequence. */
+	const unit_frame& get_frame(std::size_t n) const
+	{
+		return unit_anim_.get_frame(n);
+	}
+
+	/** Returns the display duration of the nth frame in the main animation sequence. */
+	std::chrono::milliseconds get_frame_duration(std::size_t n) const
+	{
+		return unit_anim_.get_frame_duration(n);
 	}
 
 	void add_frame(const std::chrono::milliseconds& duration, const unit_frame& value, bool force_change = false)

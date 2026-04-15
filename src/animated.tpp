@@ -352,6 +352,13 @@ inline std::size_t animated<T>::get_frames_count() const
 }
 
 template<typename T>
+inline std::chrono::milliseconds animated<T>::get_frame_duration(std::size_t n) const
+{
+	if(n < frames_.size()) return frames_[n].duration_;
+	return std::chrono::milliseconds{0};
+}
+
+template<typename T>
 inline std::chrono::milliseconds animated<T>::get_begin_time() const
 {
 	return starting_frame_time_;

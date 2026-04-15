@@ -7,6 +7,8 @@
 #pragma once
 
 #include "wesnothlite.h"
+#include "picture.hpp"         /* image::locator — must come before terrain/builder.hpp */
+#include "terrain/builder.hpp"
 
 #include <condition_variable>
 #include <deque>
@@ -338,6 +340,9 @@ struct WLEngineImpl {
      * config load + scenario init before running.  Clear after use. */
     bool        needs_scenario_init = false;
     std::string pending_scenario_id;
+
+    /* Terrain builder: created lazily per-scenario in queryTerrainAt(). */
+    std::unique_ptr<terrain_builder> tbuilder;
 };
 
 /* Expose the opaque C type as an alias so we can use the pointer directly. */
