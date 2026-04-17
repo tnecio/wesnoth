@@ -317,6 +317,73 @@ const terrain_builder::imagelist* terrain_builder::get_terrain_at(
 	return nullptr;
 }
 
+std::vector<terrain_builder::image_frame> terrain_builder::get_terrain_frames_at(
+		const map_location& loc, const std::string& tod)
+{
+	std::vector<image_frame> result;
+	if(!tile_map_.on_map(loc))
+		return result;
+
+	tile& tile_at = tile_map_[loc];
+
+	/* Ensure the tile is sorted and the frame cache is current. */
+	if(tod != tile_at.last_tod) {
+		tile_at.rebuild_cache(tod);
+		tile_at.last_tod = tod;
+	}
+
+	/* Replicate rebuild_cache iteration to recover basex/basey per frame. */
+	for(const tile::rule_image_rand& ri : tile_at.images) {
+		const bool bg = ri->is_background();
+
+		for(const rule_image_variant& variant : ri->variants) {
+			/* Flag filter */
+			if(!variant.has_flag.empty()) {
+				bool ok = true;
+				for(const std::string& s : variant.has_flag) {
+					if(tile_at.flags.find(s) == tile_at.flags.end()) { ok = false; break; }
+				}
+				if(!ok) continue;
+			}
+			/* Time-of-day filter */
+			if(!variant.tods.empty() && variant.tods.find(tod) == variant.tods.end())
+				continue;
+
+			/* Pick the randomised variant image */
+			const unsigned int rnd = (ri.rand / 7919) % variant.images.size();
+			const animated<image::locator>& anim = variant.images[rnd];
+
+			/* Skip entirely-empty animations */
+			bool is_empty = true;
+			for(std::size_t i = 0; i < anim.get_frames_count(); ++i) {
+				if(!image::is_empty_hex(anim.get_frame(i))) { is_empty = false; break; }
+			}
+			if(is_empty) continue;
+
+			/* Pixel offset from hex center */
+			const int ox = ri->basex - tilewidth_ / 2;
+			const int oy = ri->basey - tilewidth_ / 2;
+
+			/* Emit one entry per animation frame */
+			for(std::size_t i = 0; i < anim.get_frames_count(); ++i) {
+				const image::locator& lc = anim.get_frame(i);
+				if(lc.is_void()) continue;
+				image_frame f;
+				f.locator    = lc;
+				f.duration   = anim.get_frame_duration(i);
+				f.offset_x   = ox;
+				f.offset_y   = oy;
+				f.is_background = bg;
+				result.push_back(std::move(f));
+			}
+
+			break; /* only the first matching variant per rule_image */
+		}
+	}
+
+	return result;
+}
+
 bool terrain_builder::update_animation(const map_location& loc)
 {
 	if(!tile_map_.on_map(loc))

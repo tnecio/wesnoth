@@ -223,6 +223,7 @@ void launch_game_thread_impl(WLEngineImpl& e)
     e.game_exception = nullptr;
     e.current_event  = nullptr;
     e.event_buf.clear();
+    e.tbuilder.reset();   // invalidate stale map pointer before new scenario starts
     e.game_thread = std::thread(wl_run_game_thread, &e);
 }
 
@@ -1209,7 +1210,8 @@ JsVal WesnothEngine::queryTerrainAt(int x, int y)
     (void)x; (void)y;
     return {};
 #else
-    if(!impl_ || !resources::gameboard) return val::null();
+    if(!impl_ || !resources::gameboard)
+        return val::null();
 
     /* Lazily create the terrain builder the first time it is needed. */
     if(!impl_->tbuilder) {
@@ -1224,29 +1226,28 @@ JsVal WesnothEngine::queryTerrainAt(int x, int y)
     const std::string tod = resources::tod_manager
         ? resources::tod_manager->get_time_of_day().id : std::string("morning");
 
-    auto emit_layers = [&](terrain_builder::TERRAIN_TYPE type) {
-        val arr = val::array();
-        const terrain_builder::imagelist* imgs =
-            impl_->tbuilder->get_terrain_at(loc, tod, type);
-        if(!imgs) return arr;
-        for(const auto& anim : *imgs) {
-            const std::size_t n = anim.get_frames_count();
-            for(std::size_t i = 0; i < n; ++i) {
-                const image::locator& lc = anim.get_frame(i);
-                if(lc.is_void()) continue;
-                val entry = val::object();
-                entry.set("path",       resolve_img(lc.get_filename()));
-                entry.set("mods",       lc.get_modifications());
-                entry.set("durationMs", static_cast<int>(anim.get_frame_duration(i).count()));
-                arr.call<void>("push", entry);
-            }
-        }
-        return arr;
-    };
+    const auto frames = impl_->tbuilder->get_terrain_frames_at(loc, tod);
+
+    val bg_arr = val::array();
+    val fg_arr = val::array();
+
+    for(const terrain_builder::image_frame& f : frames) {
+        if(f.locator.is_void()) continue;
+        val entry = val::object();
+        entry.set("path",       resolve_img(f.locator.get_filename()));
+        entry.set("mods",       f.locator.get_modifications());
+        entry.set("durationMs", static_cast<int>(f.duration.count()));
+        entry.set("offsetX",    f.offset_x);
+        entry.set("offsetY",    f.offset_y);
+        if(f.is_background)
+            bg_arr.call<void>("push", entry);
+        else
+            fg_arr.call<void>("push", entry);
+    }
 
     val obj = val::object();
-    obj.set("background", emit_layers(terrain_builder::BACKGROUND));
-    obj.set("foreground",  emit_layers(terrain_builder::FOREGROUND));
+    obj.set("background", bg_arr);
+    obj.set("foreground",  fg_arr);
     return obj;
 #endif
 }

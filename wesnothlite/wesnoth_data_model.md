@@ -21,7 +21,6 @@ Game state – describes all the information needed from the engine to render th
     - sides: list[Side]
     - units: list[Unit]
     - villages: list[Village]
-    - items: list[Item]
     - tod: DAWN | MORNING | AFTERNOON | DUSK | FIRST_WATCH | SECOND_WATCH | CAVE | INDOOR
     - tod_cycle_length: int
     - turn: int
@@ -34,7 +33,12 @@ Game state – describes all the information needed from the engine to render th
     - terrain_render: Sprite (note: it depends on neighbouring hexes)
     - illumination: NORMAL | ILLUMINATED
     - can_recruit: bool
-    - fog: NONE | FOG | SHROUD
+    - visibility: list[SideVisibility]
+    - items: list[Sprite]
+
+- SideVisibility
+    - side_id: int
+    - visibility: NONE | FOG | SHROUD
 
 - Side
     - id: int
@@ -58,6 +62,7 @@ Game state – describes all the information needed from the engine to render th
     - maxXp: int
     - mp: int
     - maxMp: int
+    - current_defence: int
     - race: str
     - attributes: list[str]
     - facing: LEFT | RIGHT
@@ -70,22 +75,19 @@ Game state – describes all the information needed from the engine to render th
     - idle_animation: Animation
 
 - Weapon
-    - id: int
+    - id: str
     - name: str
     - count: int
     - damage: int
     - range: MELEE | RANGED
-    - type: PIERCE | CRUSH | ASTRAL
-    - attributes: list[str]
+    - type: blade | pierce | impact | fire | cold | arcane
+    - specials: BitMap
     - icon: Sprite
 
 - Village
     - loc: Loc
     - side: int | None
     - sprite: Sprite
-
-- Item
-    - icon: Sprite
 
 Display is governed by the Sprite and Animation structures:
 
@@ -112,7 +114,8 @@ Reachability map is used when a unit is selected to show its range of movement
 - Reachability
     - mp_left: int (reachable if mp_left >= 0)
     - defense: int
-    - can_attack: bool  (true if hex contains enemy unit that can be attacked from at least one neighbouring hex)
+    - can_attack_from: bool
+    - can_attack_unit_at: bool
 
 ----
 
@@ -177,6 +180,10 @@ Other
 
 ### Events
 
+Input
+
+- Waiting For Input: ()
+
 Scenario lifecycle
 
 - Loading Progress: (percentage: int)
@@ -187,7 +194,7 @@ Scenario lifecycle
 Turn flow
 
 - Start Turn: (turn_no: int)
-- Start Side Turn: ()
+- Start Side Turn: (side_id: int)
 
 Unit
 
@@ -204,6 +211,7 @@ Map
 
 - Capture Village: (loc: Loc, side_id: int)
 - Fog Update: (none: list[Loc], fog: list[Loc], shroud: list[Loc])
+- Hex Update: (loc: Loc, hex: Hex)
 - Map Update: (state: Game)
 
 Side
@@ -257,6 +265,7 @@ Supporting structures:
 - ReachabilityQuery: (unit_id: str) -> ReachabilityMap
 - SaveGameQuery: () -> ByteArray
 - CampaignsQuery: () -> list[Campaign]
+- CanUndoQuery: () -> bool
 
 ----
 
@@ -274,6 +283,7 @@ Supporting structures
 
 - init_engine(data_path: str, userdata_path: str, locale: str) -> Engine
 - Engine
-    - query(Query) -> Answer
-    - run(Command) -> list[Event] (all events that happen until the next time user input is needed)
+    - query_*(Query) -> Answer (one method per query type, returning corresponding answer type)
+    - sendCommand(Command) -> ()
+    - run() -> list[Event] (multiple Events can be returned simultaneously)
 

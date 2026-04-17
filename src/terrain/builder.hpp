@@ -22,16 +22,13 @@
 
 #include "animated.hpp"
 #include "map/location.hpp"
+#include "picture.hpp"
 #include "terrain/translation.hpp"
 
 class config;
 class game_config_view;
 
 class gamemap;
-namespace image
-{
-class locator;
-}
 /**
  * The class terrain_builder is constructed from a config object, and a
  * gamemap object. On construction, it parses the configuration and extracts
@@ -95,6 +92,47 @@ public:
 	 *						[terrain_graphics] rule reside.
 	 */
 	static void set_terrain_rules_cfg(const game_config_view& cfg);
+
+	/** Debug accessors — return rule/config counts for diagnostics. */
+	static const game_config_view* rules_cfg()       { return rules_cfg_; }
+	static std::size_t building_rules_count()        { return building_rules_.size(); }
+
+	/** Returns the number of raw images accumulated for a location (pre-rebuild). */
+	std::size_t tile_images_count(const map_location& loc) const {
+		if(!tile_map_.on_map(loc)) return 0;
+		return tile_map_[loc].images.size();
+	}
+	/** Returns the number of terrain types in terrain_by_type_ (populated by build_terrains). */
+	std::size_t terrain_type_count() const { return terrain_by_type_.size(); }
+
+	/** Returns terrain codes in terrain_by_type_ as a vector (for diagnostics). */
+	std::vector<t_translation::terrain_code> terrain_type_keys() const {
+		std::vector<t_translation::terrain_code> out;
+		for(const auto& kv : terrain_by_type_) out.push_back(kv.first);
+		return out;
+	}
+
+	/**
+	 * A single image frame with positioning data, returned by get_terrain_frames_at().
+	 * offset_x / offset_y are the pixel offsets from the hex center
+	 * (= basex - tilewidth_/2 and basey - tilewidth_/2).
+	 */
+	struct image_frame {
+		image::locator locator;
+		std::chrono::milliseconds duration;
+		int offset_x = 0;
+		int offset_y = 0;
+		bool is_background = true;
+	};
+
+	/**
+	 * Returns all image frames for the given location and time-of-day, including
+	 * per-frame pixel offsets from the hex center. Frames are ordered back-to-front
+	 * (same layer/basey order as get_terrain_at). Unlike get_terrain_at, this
+	 * method does not split into background/foreground imagelists — the
+	 * is_background field indicates which layer each frame belongs to.
+	 */
+	std::vector<image_frame> get_terrain_frames_at(const map_location& loc, const std::string& tod);
 
 	const gamemap& map() const
 	{

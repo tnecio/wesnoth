@@ -192,9 +192,11 @@ terrain/translation.cpp
 terrain/type_data.cpp
 time_of_day.cpp
 tod_manager.cpp
+units/animation.cpp
 units/abilities.cpp
 units/attack_type.cpp
 units/filter.cpp
+units/frame.cpp
 units/helper.cpp
 units/id.cpp
 units/map.cpp

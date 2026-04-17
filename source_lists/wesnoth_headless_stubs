@@ -1,4 +1,3 @@
-wesnothlite/stubs/animation_stubs.cpp
 wesnothlite/stubs/cursor.cpp
 wesnothlite/stubs/display.cpp
 wesnothlite/stubs/events.cpp
@@ -20,7 +19,6 @@ wesnothlite/stubs/singleplayer_stub.cpp
 wesnothlite/stubs/sound.cpp
 wesnothlite/stubs/soundsource.cpp
 wesnothlite/stubs/storyscreen/controller_stub.cpp
-wesnothlite/stubs/units/animation.cpp
 wesnothlite/stubs/units/animation_component.cpp
 wesnothlite/stubs/units/drawer.cpp
 wesnothlite/stubs/video.cpp

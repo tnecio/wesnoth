@@ -37,37 +37,6 @@ frame_builder::frame_builder()
     , drawing_layer_()
 {}
 
-// ---- frame_parsed_parameters ----
-// Constructor now takes (const frame_builder&, const std::chrono::milliseconds& override_duration)
-
-frame_parsed_parameters::frame_parsed_parameters(const frame_builder& builder,
-    const std::chrono::milliseconds& override_duration)
-    : duration_(override_duration.count() ? override_duration : builder.duration_)
-    , image_(builder.image_)
-    , image_diagonal_(builder.image_diagonal_)
-    , image_mod_(builder.image_mod_)
-    , halo_(builder.halo_)
-    , halo_x_(builder.halo_x_)
-    , halo_y_(builder.halo_y_)
-    , halo_mod_(builder.halo_mod_)
-    , sound_(builder.sound_)
-    , text_(builder.text_)
-    , text_color_(builder.text_color_)
-    , blend_with_(builder.blend_with_)
-    , blend_ratio_(builder.blend_ratio_)
-    , highlight_ratio_(builder.highlight_ratio_)
-    , offset_(builder.offset_)
-    , submerge_(builder.submerge_)
-    , x_(builder.x_)
-    , y_(builder.y_)
-    , directional_x_(builder.directional_x_)
-    , directional_y_(builder.directional_y_)
-    , auto_vflip_(builder.auto_vflip_)
-    , auto_hflip_(builder.auto_hflip_)
-    , primary_frame_(builder.primary_frame_)
-    , drawing_layer_(builder.drawing_layer_)
-{}
-
 // ---- unit_animation static functions ----
 
 void unit_animation::fill_initial_animations(std::vector<unit_animation>& /*animations*/,
