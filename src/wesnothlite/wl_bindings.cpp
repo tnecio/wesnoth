@@ -58,6 +58,9 @@ EMSCRIPTEN_BINDINGS(wesnothlite) {
         .function("queryAttackOptions",       &WesnothEngine::queryAttackOptions)
         .function("queryTerrainAt",           &WesnothEngine::queryTerrainAt)
         .function("queryUnitTypeAnimations",  &WesnothEngine::queryUnitTypeAnimations)
+        .function("queryColorPalettes",       &WesnothEngine::queryColorPalettes)
+        .function("queryColorRanges",         &WesnothEngine::queryColorRanges)
+        .function("querySideColorRange",      &WesnothEngine::querySideColorRange)
         ;
 }
 

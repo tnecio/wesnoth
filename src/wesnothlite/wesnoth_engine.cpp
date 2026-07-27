@@ -14,6 +14,7 @@
 #include "commandline_options.hpp"
 #include "events.hpp"
 #include "filesystem.hpp"
+#include "color_range.hpp"
 #include "game_config.hpp"
 #include "game_config_manager.hpp"
 #include "game_end_exceptions.hpp"
@@ -1305,5 +1306,80 @@ JsVal WesnothEngine::queryUnitTypeAnimations(const std::string& type_id)
             result.set(event, frames);
     }
     return result;
+#endif
+}
+
+/* =========================================================================
+ * Color palette / range export (for JS-side IPF processing)
+ * ========================================================================= */
+
+#ifdef __EMSCRIPTEN__
+namespace {
+
+/** Pack a color_t as a 3-element JS array [r, g, b]. */
+static val color_to_js(const color_t& c)
+{
+    val a = val::array();
+    a.call<void>("push", static_cast<int>(c.r));
+    a.call<void>("push", static_cast<int>(c.g));
+    a.call<void>("push", static_cast<int>(c.b));
+    return a;
+}
+
+/** Pack a color_range as a JS object {mid, max, min, rep}. */
+static val range_to_js(const color_range& cr)
+{
+    val obj = val::object();
+    obj.set("mid", color_to_js(cr.mid()));
+    obj.set("max", color_to_js(cr.max()));
+    obj.set("min", color_to_js(cr.min()));
+    obj.set("rep", color_to_js(cr.rep()));
+    return obj;
+}
+
+} // namespace
+#endif
+
+JsVal WesnothEngine::queryColorPalettes()
+{
+#ifndef __EMSCRIPTEN__
+    return {};
+#else
+    val result = val::object();
+    for(const auto& [name, palette] : game_config::team_rgb_colors) {
+        val arr = val::array();
+        for(const color_t& c : palette)
+            arr.call<void>("push", color_to_js(c));
+        result.set(name, arr);
+    }
+    return result;
+#endif
+}
+
+JsVal WesnothEngine::queryColorRanges()
+{
+#ifndef __EMSCRIPTEN__
+    return {};
+#else
+    val result = val::object();
+    for(const auto& [name, range] : game_config::team_rgb_range) {
+        result.set(name, range_to_js(range));
+    }
+    return result;
+#endif
+}
+
+JsVal WesnothEngine::querySideColorRange(int side)
+{
+#ifndef __EMSCRIPTEN__
+    (void)side;
+    return {};
+#else
+    try {
+        const color_range& cr = team::get_side_color_range(side);
+        return range_to_js(cr);
+    } catch(...) {
+        return val::null();
+    }
 #endif
 }

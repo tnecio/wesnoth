@@ -103,6 +103,20 @@ public:
      *  Stable for the life of the loaded game config; cache by type_id. */
     JsVal queryUnitTypeAnimations(const std::string& type_id);
 
+    /** Named color palettes from game config (tc_info).
+     *  Returns { [name]: [[r,g,b], ...] }.
+     *  Available immediately after engine init; does not require a running scenario. */
+    JsVal queryColorPalettes();
+
+    /** Named color ranges from game config (color_info).
+     *  Returns { [name]: { mid:[r,g,b], max:[r,g,b], min:[r,g,b], rep:[r,g,b] } }.
+     *  Available immediately after engine init. */
+    JsVal queryColorRanges();
+
+    /** Color range for a specific team side (1-based).
+     *  Returns { mid:[r,g,b], max:[r,g,b], min:[r,g,b], rep:[r,g,b] } or null. */
+    JsVal querySideColorRange(int side);
+
 private:
     WLEngineImpl* impl_;
 
