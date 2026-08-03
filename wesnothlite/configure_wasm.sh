@@ -14,6 +14,11 @@
 #   . /emsdk/emsdk_env.sh
 #   bash wesnothlite/configure_wasm.sh
 #   cmake --build build-wasm --target wesnothlite -j4
+#
+# Build type defaults to RelWithDebInfo. A Debug build links a ~156 MB
+# wesnothlite.wasm, which is slow enough to instantiate that it dominates
+# page-load time during frontend iteration. Override with:
+#   WL_BUILD_TYPE=Debug bash wesnothlite/configure_wasm.sh
 
 set -euo pipefail
 
@@ -38,7 +43,7 @@ cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
     -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="${EMSCRIPTEN_ROOT}/cmake/Modules/Platform/Emscripten.cmake" \
     -DVCPKG_TARGET_TRIPLET=wasm32-emscripten \
     -DVCPKG_MANIFEST_MODE=OFF \
-    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_TYPE="${WL_BUILD_TYPE:-RelWithDebInfo}" \
     -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
     -DENABLE_GAME=OFF \
     -DENABLE_SERVER=OFF \
