@@ -467,6 +467,66 @@ if(NOT EMSCRIPTEN)
 	)
 endif()
 
+########### WesnothLite image oracle (native only) ###############
+#
+# Reference rasteriser for image locators. The frontend reimplements Wesnoth's
+# image path functions in TypeScript; this links the engine's real picture.cpp
+# and image_modifications.cpp so that reimplementation can be diffed against
+# ground truth per image, rather than judged from a screenshot.
+#
+# Built from the same headless sources as wesnothlite with two differences:
+# the picture.cpp stub is swapped for the real file (via the wesnoth_oracle_stubs
+# list), and the mock SDL2 headers in wesnothlite/headless are NOT on the include
+# path, so real SDL2 and SDL2_image are used.
+
+if(NOT EMSCRIPTEN AND ENABLE_IMAGE_ORACLE)
+	find_package(SDL2 REQUIRED)
+	find_package(SDL2_image REQUIRED)
+
+	GetSources("wesnoth_oracle_stubs" wesnoth_oracle_stubs_sources)
+
+	add_executable(wl-image-oracle
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/wl_image_oracle.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/picture.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/image_modifications.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/sdl/surface.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/sdl/utils.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/sdl/texture.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/sdl/exception.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/filesystem_sdl.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/xBRZ/xbrz.cpp
+		${wesnoth_headless_sources}
+		${lua_headless_sources}
+		${wesnoth_oracle_stubs_sources}
+	)
+
+	# Stub headers still shadow display/gui2 etc., but NOT the SDL2 shim.
+	target_include_directories(wl-image-oracle BEFORE PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite/stubs
+	)
+	target_include_directories(wl-image-oracle PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR}
+		${CMAKE_CURRENT_SOURCE_DIR}/wesnothlite
+		${CMAKE_CURRENT_SOURCE_DIR}/modules
+		${SDL2_INCLUDE_DIRS}
+	)
+
+	target_compile_definitions(wl-image-oracle PRIVATE HEADLESS_ENGINE=1)
+
+	target_link_libraries(wl-image-oracle
+		${common-external-libs}
+		${Boost_LIBRARIES}
+		OpenSSL::Crypto
+		OpenSSL::SSL
+		SDL2::SDL2
+		SDL2_image::SDL2_image
+		${CMAKE_DL_LIBS}
+	)
+
+	set_source_files_properties(${lua_headless_sources} PROPERTIES OBJECT_DEPENDS ${wesnoth_lua_config})
+endif()
+
 ########### Campaignd Server ###############
 
 if(ENABLE_CAMPAIGN_SERVER)

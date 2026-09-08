@@ -244,3 +244,4 @@ widgets_tested.log
 
 # fontfig cache directory
 LOCAL_APPDATA_FONTCONFIG_CACHE
+build-oracle/

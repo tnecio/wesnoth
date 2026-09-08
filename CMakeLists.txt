@@ -50,6 +50,9 @@ option(ENABLE_CAMPAIGN_SERVER "Enable compilation of campaign(add-ons) server")
 option(ENABLE_SERVER "Enable compilation of MP server" ON)
 option(ENABLE_MYSQL "Enable building MP/add-ons servers with mysql support" OFF)
 option(ENABLE_TESTS "Build unit tests")
+# Reference image rasteriser used to validate the frontend's TypeScript
+# reimplementation of image path functions. Native only; needs SDL2_image.
+option(ENABLE_IMAGE_ORACLE "Build wl-image-oracle (native reference rasteriser)" OFF)
 option(ENABLE_NLS "Enable building of translations" ${ENABLE_GAME})
 
 # The next line is the minimum version of Boost. The version that's actually found will be put in Boost_VERSION.

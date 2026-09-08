@@ -9,8 +9,6 @@ wesnothlite/stubs/gui2_stubs.cpp
 wesnothlite/stubs/halo.cpp
 wesnothlite/stubs/hotkey_stubs.cpp
 wesnothlite/stubs/misc_stubs.cpp
-wesnothlite/stubs/picture.cpp
-wesnothlite/stubs/sdl_surface.cpp
 wesnothlite/stubs/playmp_stub.cpp
 wesnothlite/stubs/preferences/display.cpp
 wesnothlite/stubs/preferences_stubs.cpp

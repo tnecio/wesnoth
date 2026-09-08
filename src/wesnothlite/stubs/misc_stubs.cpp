@@ -106,6 +106,11 @@ std::chrono::steady_clock::time_point get_current_animation_tick()
     return std::chrono::steady_clock::time_point{};
 }
 
+/* Paired with the above: units/animation.cpp and units/frame.cpp call this to
+   advance the animation clock. Headless play never ticks, so it is a no-op —
+   but the symbol has to exist for anything linking those files. */
+void new_animation_frame() {}
+
 // gui::in_dialog() was removed upstream; gui2::is_in_dialog() is now used instead.
 
 // ---- gui::button::set_check ----
@@ -374,107 +379,6 @@ int fake_unit_manager::remove_temporary_unit(internal_ptr_type u)
 #include <unordered_map>
 #include <unordered_set>
 
-namespace image {
-
-static std::unordered_map<std::string, bool> s_file_cache;
-static std::unordered_set<std::string> s_precached_dirs;
-
-static void precache_dir(const std::string& base, const std::string& subdir)
-{
-    const std::string full = base + "/" + subdir;
-    if(s_precached_dirs.count(full)) return;
-    s_precached_dirs.insert(full);
-    if(!filesystem::is_directory(full)) return;
-
-    std::vector<std::string> files, dirs;
-    filesystem::get_files_in_dir(full, &files, &dirs,
-        filesystem::name_mode::FILE_NAME_ONLY,
-        filesystem::filter_mode::NO_FILTER,
-        filesystem::reorder_mode::DONT_REORDER);
-    for(const auto& f : files)
-        s_file_cache[subdir + f] = true;
-    for(const auto& d : dirs)
-        precache_dir(base, subdir + d + "/");
-}
-
-bool exists(const locator& i_locator) {
-    if(i_locator.get_filename().empty()) return false;
-    const std::string& fn = i_locator.get_filename();
-    auto it = s_file_cache.find(fn);
-    if(it != s_file_cache.end()) return it->second;
-    bool found = filesystem::get_binary_file_location("images", fn).has_value();
-    s_file_cache[fn] = found;
-    return found;
-}
-void flush_cache() {}
-point get_size(const locator& /*i_locator*/, bool /*skip_cache*/) { return {0, 0}; }
-bool is_empty_hex(const locator& /*i_locator*/) { return false; }
-bool precached_file_exists(const std::string& file) {
-    auto it = s_file_cache.find(file);
-    if(it != s_file_cache.end()) return it->second;
-    return false;
-}
-void precache_file_existence(const std::string& subdir) {
-    for(const auto& p : filesystem::get_binary_paths("images"))
-        precache_dir(p, subdir);
-}
-
-locator::locator(const std::string& filename)
-    : type_(FILE)
-    , filename_(filename)
-{}
-
-locator::locator(const std::string& filename, const std::string& modifications)
-    : type_(SUB_FILE)
-    , filename_(filename)
-    , modifications_(modifications)
-{}
-
-locator::locator(const std::string& filename, const map_location& loc,
-    int center_x, int center_y, const std::string& modifications)
-    : type_(SUB_FILE)
-    , filename_(filename)
-    , modifications_(modifications)
-    , loc_(loc)
-    , center_x_(center_x)
-    , center_y_(center_y)
-{}
-
-} // namespace image
-
-// ---- surface methods ----
-// sdl/surface.cpp is in libwesnoth_sdl, not compiled into headless.
-// Provide minimal stubs for all non-inline surface methods.
-#include "sdl/surface.hpp"
-#include "sdl/point.hpp"
-
-surface::surface(SDL_Surface* surf) : surface_(surf) {}
-surface::surface(int /*w*/, int /*h*/) : surface_(nullptr) {}
-surface::surface(const surface& s) : surface_(s.surface_) { if(surface_) ++surface_->refcount; }
-surface::surface(surface&& s) noexcept : surface_(s.surface_) { s.surface_ = nullptr; }
-surface::~surface() { if(surface_) SDL_FreeSurface(surface_); }
-
-surface& surface::operator=(const surface& s)
-{
-    if(surface_) SDL_FreeSurface(surface_);
-    surface_ = s.surface_;
-    if(surface_) ++surface_->refcount;
-    return *this;
-}
-
-surface& surface::operator=(surface&& s) noexcept
-{
-    if(surface_) SDL_FreeSurface(surface_);
-    surface_ = s.surface_;
-    s.surface_ = nullptr;
-    return *this;
-}
-
-surface surface::clone() const { return surface{}; }
-point surface::size() const { return {0, 0}; }
-std::size_t surface::area() const { return 0; }
-
-std::ostream& operator<<(std::ostream& s, const surface& /*surf*/) { return s; }
 
 // ---- wb::side_actions_container ----
 #include "whiteboard/side_actions.hpp"
